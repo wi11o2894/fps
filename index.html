@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOON FPS: v6.7 WEAPON SYNC</title>
+    <title>TOON FPS: v6.8 HEIGHT FIX</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
         canvas { display: block; }
@@ -22,7 +22,7 @@
     <div id="crosshair"></div>
     <div id="health-container"><div id="health-bar"></div></div>
     <div id="gui">
-        <div style="font-weight: bold;">TOON FPS v6.7</div>
+        <div style="font-weight: bold;">TOON FPS v6.8</div>
         <div id="my-id" style="font-size: 10px; color: #666;">ID: Connecting...</div>
         <div id="status" style="font-size: 10px; color: #2ed573;">Waiting for players...</div>
         <button id="copy-link">SHARE INVITE</button>
@@ -99,17 +99,17 @@
         function createPlayerModel(color) {
             const group = new THREE.Group();
             const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 1, 4, 8), toonMat(color));
+            body.position.y = 0.9; // Shift body up so feet are at 0
             const visor = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.25, 0.2), toonMat(0x333333));
-            visor.position.set(0, 0.45, -0.3);
+            visor.position.set(0, 1.35, -0.3);
             
-            // Attached RPG for others to see
             const tpRPG = new THREE.Group();
             const tpTube = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1, 8), toonMat(0x333333));
             tpTube.rotation.x = Math.PI / 2;
             const tpShield = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.4, 8), toonMat(0x8B4513));
             tpShield.rotation.x = Math.PI / 2;
             tpRPG.add(tpTube, tpShield);
-            tpRPG.position.set(0.4, 0, -0.4);
+            tpRPG.position.set(0.4, 0.9, -0.4);
             
             const tpFlash = new THREE.PointLight(0xFFD700, 0, 3);
             tpFlash.position.set(0, 0, -0.6);
@@ -120,7 +120,8 @@
         }
 
         // --- STATE ---
-        let health = 100, isDead = false, isReloading = false, vel = new THREE.Vector3(), bobTimer = 0, currentEyeHeight = 1.6;
+        let health = 100, isDead = false, isReloading = false, vel = new THREE.Vector3(), bobTimer = 0, currentEyeHeight = 1.7; 
+        camera.position.y = currentEyeHeight; // Raise starting camera
         let move = { f: false, b: false, l: false, r: false, sprint: false, crouch: false };
         let projectiles = [], explosions = [];
         const speedLinesEl = document.getElementById('speed-lines');
@@ -141,7 +142,6 @@
             Object.values(connections).forEach(c => { if(c.open) c.send({ type: 'rpc_fire' }); });
             setTimeout(() => { flash.intensity = 0; }, 50);
             
-            // Reload sequence
             setTimeout(() => {
                 const drop = setInterval(() => {
                     rpgGroup.position.y -= 0.06; rpgGroup.rotation.z += 0.02;
@@ -188,7 +188,7 @@
                         players[c.peer] = { ...pData, target: new THREE.Vector3(), tRot: 0 };
                         scene.add(players[c.peer].group);
                     }
-                    players[c.peer].target.set(d.x, d.y - 1.6, d.z); players[c.peer].tRot = d.ry;
+                    players[c.peer].target.set(d.x, d.y - currentEyeHeight, d.z); players[c.peer].tRot = d.ry;
                 }
             });
         }
@@ -197,7 +197,7 @@
 
         // --- HELPERS ---
         function die() { isDead = true; health = 0; updateUI(); document.getElementById('death-screen').style.display = 'flex'; controls.unlock(); let count = 3; const t = setInterval(() => { count--; document.getElementById('timer').innerText = count; if(count<=0) { clearInterval(t); respawn(); } }, 1000); }
-        function respawn() { isDead = false; health = 100; updateUI(); document.getElementById('death-screen').style.display = 'none'; camera.position.set(0, 1.6, 0); controls.lock(); }
+        function respawn() { isDead = false; health = 100; updateUI(); document.getElementById('death-screen').style.display = 'none'; camera.position.set(0, currentEyeHeight, 0); controls.lock(); }
         function updateUI() { document.getElementById('health-bar').style.width = health + "%"; }
 
         // --- LOOP ---
@@ -228,7 +228,10 @@
                 speedLinesEl.style.opacity = (move.sprint && isMoving ? "1" : "0");
                 const dir = new THREE.Vector3(Number(move.r)-Number(move.l), 0, Number(move.f)-Number(move.b)).normalize();
                 controls.moveRight(dir.x * speed * delta * 0.1); controls.moveForward(dir.z * speed * delta * 0.1);
-                currentEyeHeight = THREE.MathUtils.lerp(currentEyeHeight, (move.crouch ? 0.8 : 1.6), 10 * delta);
+                
+                let targetH = move.crouch ? 0.9 : 1.7;
+                currentEyeHeight = THREE.MathUtils.lerp(currentEyeHeight, targetH, 10 * delta);
+                
                 camera.position.y += vel.y * delta;
                 if (camera.position.y <= currentEyeHeight) {
                     camera.position.y = currentEyeHeight; vel.y = 0;
