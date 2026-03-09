@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOON FPS: RESTORED v6.1</title>
+    <title>TOON FPS: MULTIPLAYER FIX v6.2</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
         canvas { display: block; }
@@ -23,7 +23,7 @@
     <div id="crosshair"></div>
     <div id="health-container"><div id="health-bar"></div></div>
     <div id="gui">
-        <div style="font-weight: bold;">TOON FPS v6.1 (RESTORED)</div>
+        <div style="font-weight: bold;">TOON FPS v6.2 (FIXED)</div>
         <div id="my-id" style="font-size: 10px; color: #666;">Connecting...</div>
         <button id="copy-link">SHARE INVITE</button>
         <div style="font-size: 9px; margin-top: 5px; color: #999;">SHIFT: SPRINT | C: CROUCH | CLICK: RPG</div>
@@ -57,7 +57,7 @@
         const controls = new PointerLockControls(camera, document.body);
         const toonMat = (color) => new THREE.MeshToonMaterial({ color, side: THREE.DoubleSide });
 
-        // World
+        // World Initialization
         const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), toonMat(0x2ed573));
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
@@ -83,6 +83,12 @@
         camera.add(flash);
         scene.add(camera);
 
+        // State & Physics
+        let health = 100, isDead = false, vel = new THREE.Vector3(), bobTimer = 0, currentEyeHeight = 1.6;
+        let move = { f: false, b: false, l: false, r: false, sprint: false, crouch: false };
+        let projectiles = [], explosions = [];
+        const speedLinesEl = document.getElementById('speed-lines');
+
         function createPlayerModel(color) {
             const group = new THREE.Group();
             const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 1, 4, 8), toonMat(color));
@@ -91,12 +97,6 @@
             group.add(body, visor);
             return group;
         }
-
-        // State
-        let health = 100, isDead = false, vel = new THREE.Vector3(), bobTimer = 0, currentEyeHeight = 1.6;
-        let move = { f: false, b: false, l: false, r: false, sprint: false, crouch: false };
-        let projectiles = [], explosions = [];
-        const speedLinesEl = document.getElementById('speed-lines');
 
         function fireRPG() {
             if(isDead || !controls.isLocked) return;
@@ -112,7 +112,9 @@
             scene.add(rocket);
             projectiles.push(rocket);
             
-            Object.values(connections).forEach(c => c.send({ type: 'rpc_fire', pos: rocket.position, quat: rocket.quaternion }));
+            Object.values(connections).forEach(c => {
+                if(c.open) c.send({ type: 'rpc_fire', pos: rocket.position, quat: rocket.quaternion });
+            });
         }
 
         function createExplosion(pos) {
@@ -134,12 +136,12 @@
 
             Object.keys(players).forEach(id => {
                 if(players[id].mesh.position.distanceTo(pos) < 5) {
-                    connections[id].send({ type: 'hit', damage: 35 });
+                    if(connections[id]) connections[id].send({ type: 'hit', damage: 35 });
                 }
             });
         }
 
-        // Controls
+        // INPUT
         document.addEventListener('click', () => { if(!controls.isLocked) controls.lock(); else fireRPG(); });
         document.onkeydown = (e) => {
             if(isDead) return;
@@ -157,7 +159,7 @@
             if(e.code==='KeyC') move.crouch = false;
         };
 
-        // Networking
+        // NETWORKING FIX
         const peer = new Peer(), players = {}, connections = {};
         peer.on('open', id => document.getElementById('my-id').innerText = id);
         document.getElementById('copy-link').onclick = () => {
@@ -165,18 +167,34 @@
             navigator.clipboard.writeText(link); alert("Invite Copied!");
         };
         peer.on('connection', setupConn);
+
         function setupConn(c) {
             connections[c.peer] = c;
             c.on('data', d => {
                 if(d.type === 'hit') { health -= d.damage; if(health<=0 && !isDead) die(); updateUI(); }
-                if(!players[c.peer]) {
-                    const model = createPlayerModel(Math.random()*0xffffff);
-                    players[c.peer] = { mesh: model, target: new THREE.Vector3() };
-                    scene.add(model);
+                else if(d.type === 'rpc_fire') { /* Add remote visual rockets here if desired */ }
+                else {
+                    // This is the core position sync
+                    if(!players[c.peer]) {
+                        const model = createPlayerModel(Math.random()*0xffffff);
+                        players[c.peer] = { mesh: model, target: new THREE.Vector3(), targetRot: 0 };
+                        scene.add(model);
+                    }
+                    players[c.peer].target.set(d.x, d.y - 1.6, d.z);
+                    players[c.peer].targetRot = d.ry;
                 }
-                players[c.peer].target.set(d.x, d.y-1.6, d.z);
             });
-            setInterval(() => { if(c.open) c.send({ x: camera.position.x, y: camera.position.y, z: camera.position.z }); }, 16);
+            // Send our data to them
+            setInterval(() => { 
+                if(c.open) c.send({ x: camera.position.x, y: camera.position.y, z: camera.position.z, ry: camera.rotation.y }); 
+            }, 16);
+        }
+
+        // Automatic join if link used
+        const urlJoin = new URLSearchParams(window.location.search).get('join');
+        if(urlJoin) {
+            const conn = peer.connect(urlJoin);
+            setupConn(conn);
         }
 
         function die() {
@@ -196,14 +214,12 @@
         }
         function updateUI() { document.getElementById('health-bar').style.width = health + "%"; }
 
-        // Window Resize Logic
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // Game Loop
         const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
@@ -253,7 +269,11 @@
                 }
             }
 
-            for(let id in players) players[id].mesh.position.lerp(players[id].target, 0.2);
+            // Sync other players
+            for(let id in players) {
+                players[id].mesh.position.lerp(players[id].target, 0.2);
+                players[id].mesh.rotation.y = THREE.MathUtils.lerp(players[id].mesh.rotation.y, players[id].targetRot, 0.2);
+            }
             effect.render(scene, camera);
         }
         animate();
