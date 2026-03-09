@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOON FPS: v8.4 TOTAL</title>
+    <title>TOON FPS: v8.5 AUDIO SYNTH</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
         canvas { display: block; width: 100vw; height: 100vh; }
@@ -17,15 +17,15 @@
     </style>
 </head>
 <body>
-    <div id="death-screen"><h1>DEFEATED</h1><p>RESPAWNING IN <span id="timer">3</span>...</p></div>
+    <div id="death-screen"><h1>DEFEATED</h1><p>RESPAWNING...</p></div>
     <div id="speed-lines"></div>
     <div id="crosshair"></div>
     <div id="health-container"><div id="health-bar"></div></div>
     <div id="gui">
-        <div style="font-weight: bold;">TOON FPS v8.4</div>
+        <div style="font-weight: bold;">TOON FPS v8.5</div>
         <div id="my-id" style="font-size: 10px; color: #666;">ID: Connecting...</div>
-        <div id="status" style="font-size: 10px; color: #2ed573;">Waiting for players...</div>
         <button id="copy-link">SHARE INVITE</button>
+        <div style="font-size: 9px; margin-top:5px;">CLICK ANYWHERE TO ENABLE AUDIO</div>
     </div>
 
     <script type="importmap">
@@ -44,6 +44,57 @@
         import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
         import { Peer } from 'peerjs';
 
+        // --- AUDIO SYNTHESIZER ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const playSynth = {
+            fire: () => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+            },
+            explosion: () => {
+                const noise = audioCtx.createBufferSource();
+                const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.5, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < buffer.length; i++) data[i] = Math.random() * 2 - 1;
+                noise.buffer = buffer;
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'lowpass'; filter.frequency.setValueAtTime(400, audioCtx.currentTime);
+                filter.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.5);
+                const gain = audioCtx.createGain();
+                gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+                noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+                noise.start();
+            },
+            jump: () => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+            },
+            smash: () => {
+                const osc = audioCtx.createOscillator();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+                const gain = audioCtx.createGain();
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.1);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+            }
+        };
+
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87CEEB);
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -56,7 +107,7 @@
         const controls = new PointerLockControls(camera, document.body);
         const toonMat = (color) => new THREE.MeshToonMaterial({ color });
 
-        // --- WORLD & GRASS ---
+        // --- WORLD ---
         const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), toonMat(0x2ed573));
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
@@ -67,7 +118,6 @@
             scene.add(blade);
         }
 
-        // --- PLANK CRATES ---
         const crates = [];
         function createPlankCrate(x, z) {
             const group = new THREE.Group();
@@ -91,13 +141,12 @@
         const sun = new THREE.DirectionalLight(0xffffff, 0.8);
         sun.position.set(10, 20, 10); scene.add(sun);
 
-        // --- PLAYER MODELS (LOCAL & REMOTE) ---
+        // --- PLAYER MODELS ---
         function createPlayerModel(color) {
             const group = new THREE.Group();
             const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.25, 0.5, 4, 8), toonMat(color));
             torso.position.y = 1.05;
-            const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), toonMat(0xeeeeee));
-            head.position.y = 1.55;
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), toonMat(0xeeeeee)); head.position.y = 1.55;
             const createEye = (side) => {
                 const eyeGroup = new THREE.Group();
                 const white = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), toonMat(0xffffff));
@@ -110,47 +159,34 @@
             head.add(leftEye.group, rightEye.group);
             const createLimb = (isLeg) => {
                 const root = new THREE.Group();
-                const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.25, 4, 8), toonMat(isLeg ? 0x222222 : color));
-                upper.position.y = -0.125;
+                const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.25, 4, 8), toonMat(isLeg ? 0x222222 : color)); upper.position.y = -0.125;
                 const lowerGroup = new THREE.Group(); lowerGroup.position.y = -0.25;
-                const lower = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.25, 4, 8), toonMat(isLeg ? 0x222222 : color));
-                lower.position.y = -0.125; lowerGroup.add(lower); root.add(upper, lowerGroup);
-                return { root, lower: lowerGroup };
+                const lower = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.25, 4, 8), toonMat(isLeg ? 0x222222 : color)); lower.position.y = -0.125;
+                lowerGroup.add(lower); root.add(upper, lowerGroup); return { root, lower: lowerGroup };
             };
             const legL = createLimb(true); legL.root.position.set(-0.15, 0.8, 0);
             const legR = createLimb(true); legR.root.position.set(0.15, 0.8, 0);
-            const armL = createLimb(false); armL.root.position.set(-0.35, 1.3, 0);
-            const armR = createLimb(false); armR.root.position.set(0.35, 1.3, 0);
-            group.add(torso, head, legL.root, legR.root, armL.root, armR.root);
-            return { group, torso, legL, legR, armL, armR, leftEye, rightEye };
+            group.add(torso, head, legL.root, legR.root);
+            return { group, legL, legR, leftEye, rightEye };
         }
 
         function createRPGModel() {
             const group = new THREE.Group();
-            const mainTube = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0), toonMat(0x222222));
-            mainTube.rotation.x = Math.PI/2;
-            const woodGrip = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.4), toonMat(0x8B4513));
-            woodGrip.rotation.x = Math.PI/2; woodGrip.position.z = 0.1;
-            const handle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.15, 0.06), toonMat(0x552211));
-            handle.position.set(0, -0.12, -0.1);
+            const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0), toonMat(0x222222)); tube.rotation.x = Math.PI/2;
             const rocketGroup = new THREE.Group();
-            const rTip = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 12), toonMat(0x4b5320));
-            rTip.rotation.x = -Math.PI/2; rTip.position.z = -0.7;
-            const rBody = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.4), toonMat(0x6b8e23));
-            rBody.rotation.x = Math.PI/2; rBody.position.z = -0.5;
-            rocketGroup.add(rTip, rBody); group.add(mainTube, woodGrip, handle, rocketGroup);
-            return { group, rocket: rocketGroup };
+            const rTip = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3), toonMat(0x4b5320)); rTip.rotation.x = -Math.PI/2; rTip.position.z = -0.7;
+            rocketGroup.add(rTip); group.add(tube, rocketGroup); return { group, rocket: rocketGroup };
         }
-
         const myRPG = createRPGModel(); myRPG.group.position.set(0.4, -0.4, -0.6); camera.add(myRPG.group); scene.add(camera);
 
-        // --- STATE & PHYSICS ---
+        // --- PHYSICS & LOGIC ---
         let health = 100, isDead = false, isReloading = false, vel = new THREE.Vector3();
         let move = { f: false, b: false, l: false, r: false, sprint: false, crouch: false };
         let projectiles = [], explosions = [], particles = [], fragments = [];
         let baseH = 1.7, crouchH = 1.0, targetH = 1.7;
 
         function createExplosion(pos) {
+            playSynth.explosion();
             const group = new THREE.Group(); group.position.copy(pos);
             for(let i=0; i<8; i++){
                 const b = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), toonMat(i % 2 === 0 ? 0xffa502 : 0xffffff));
@@ -162,9 +198,7 @@
             if(dist < 7.5) {
                 const pushDir = new THREE.Vector3().subVectors(camera.position, pos).normalize();
                 const power = (7.5 - dist);
-                vel.x += pushDir.x * power * 8; // Reduced outward
-                vel.z += pushDir.z * power * 8; // Reduced outward
-                vel.y += power * 4; // Maintained upward
+                vel.x += pushDir.x * power * 8; vel.z += pushDir.z * power * 8; vel.y += power * 4;
             }
             
             Object.keys(players).forEach(id => {
@@ -181,6 +215,7 @@
         }
 
         function shatterCrate(crate) {
+            playSynth.smash();
             const pos = crate.position.clone(); scene.remove(crate);
             for(let i=0; i<8; i++) {
                 const frag = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.2, 0.1), toonMat(0x8B4513));
@@ -190,13 +225,10 @@
             }
         }
 
-        function spawnSmoke(pos) {
-            const s = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 }));
-            s.position.copy(pos); scene.add(s); particles.push({ mesh: s, life: 1.0 });
-        }
-
         function fire() {
             if(isDead || !controls.isLocked || isReloading) return;
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            playSynth.fire();
             isReloading = true; myRPG.rocket.visible = false;
             const rocket = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.3), toonMat(0x6b8e23));
             rocket.position.copy(camera.position); rocket.quaternion.copy(camera.quaternion);
@@ -225,7 +257,6 @@
         function die() { isDead = true; document.getElementById('death-screen').style.display = 'flex'; controls.unlock(); setTimeout(() => { isDead = false; health = 100; updateUI(); document.getElementById('death-screen').style.display = 'none'; camera.position.set(0, 1.7, 0); controls.lock(); }, 3000); }
         function updateUI() { document.getElementById('health-bar').style.width = health + "%"; }
 
-        // --- LOOP ---
         const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
@@ -233,20 +264,17 @@
 
             projectiles.forEach((p, i) => {
                 p.position.add(p.userData.vel); p.userData.life--;
-                if(p.userData.life % 2 === 0) spawnSmoke(p.position);
                 crates.forEach(c => { if(p.position.distanceTo(c.position) < 1.0) p.userData.life = 0; });
                 if(p.position.y < 0.1 || p.userData.life <= 0) { createExplosion(p.position); scene.remove(p); projectiles.splice(i,1); }
             });
 
-            particles.forEach((p, i) => { p.life -= delta * 1.5; p.mesh.scale.multiplyScalar(1.05); p.mesh.material.opacity = p.life; if(p.life <= 0) { scene.remove(p.mesh); particles.splice(i, 1); } });
-            fragments.forEach((f, i) => { f.userData.vel.y -= 15 * delta; f.position.add(f.userData.vel.clone().multiplyScalar(delta)); if(f.position.y < 0.1) { f.position.y = 0.1; f.userData.vel.set(0,0,0); } f.userData.life -= delta; if(f.userData.life <= 0) { scene.remove(f); fragments.splice(i, 1); } });
+            fragments.forEach((f, i) => { f.userData.vel.y -= 15 * delta; f.position.add(f.userData.vel.clone().multiplyScalar(delta)); if(f.position.y < 0.1) f.position.y = 0.1; f.userData.life -= delta; if(f.userData.life <= 0) { scene.remove(f); fragments.splice(i, 1); } });
             explosions.forEach((ex, i) => { ex.time += delta; ex.mesh.scale.multiplyScalar(1.1); if(ex.time > 0.4) { scene.remove(ex.mesh); explosions.splice(i, 1); } });
 
             if (controls.isLocked && !isDead) {
                 vel.y -= 25 * delta;
                 const speed = move.crouch ? 0.08 : (move.sprint ? 0.3 : 0.15);
                 targetH = move.crouch ? crouchH : baseH;
-                
                 const isMoving = move.f || move.b || move.l || move.r;
                 document.getElementById('speed-lines').style.opacity = (move.sprint && isMoving && !move.crouch) ? "1" : "0";
 
@@ -263,17 +291,13 @@
                         else if (dy < 0.3) { camera.position.x = oldPos.x; camera.position.z = oldPos.z; }
                     }
                 });
-
                 if(camera.position.y < targetH && !onCrate) { camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetH, 0.2); if(vel.y < 0) vel.y = 0; }
                 vel.x *= 0.92; vel.z *= 0.92; 
             }
 
             for(let id in players) {
                 const p = players[id]; p.group.position.lerp(p.target, 0.2); p.group.rotation.y = p.tRot + Math.PI;
-                const eyeS = Math.sin(Date.now() * 0.01) * 0.02; p.leftEye.pupil.position.x = eyeS; p.rightEye.pupil.position.x = -eyeS;
-                if(p.inAir) { p.anim += delta * 15; p.legL.root.rotation.z = Math.sin(p.anim) * 0.5; p.legR.root.rotation.z = Math.cos(p.anim) * 0.5; }
-                else if(p.moving) { p.anim += delta * 12; const swing = Math.sin(p.anim) * 0.8; p.legL.root.rotation.x = swing; p.legR.root.rotation.x = -swing; }
-                else { p.legL.root.rotation.x = p.legR.root.rotation.x = 0; }
+                if(p.moving) { p.anim += delta * 12; p.legL.root.rotation.x = Math.sin(p.anim) * 0.8; p.legR.root.rotation.x = -Math.sin(p.anim) * 0.8; }
             }
             effect.render(scene, camera);
         }
@@ -283,7 +307,7 @@
         window.onkeydown = (e) => { 
             if(e.code==='KeyW') move.f=true; if(e.code==='KeyS') move.b=true; if(e.code==='KeyA') move.l=true; if(e.code==='KeyD') move.r=true; 
             if(e.code==='ShiftLeft') move.sprint=true; if(e.code==='KeyC') move.crouch=true;
-            if(e.code==='Space' && !move.crouch) vel.y = 10; 
+            if(e.code==='Space' && !move.crouch && camera.position.y <= targetH + 0.1) { vel.y = 10; playSynth.jump(); }
         };
         window.onkeyup = (e) => { if(e.code==='KeyW') move.f=false; if(e.code==='KeyS') move.b=false; if(e.code==='KeyA') move.l=false; if(e.code==='KeyD') move.r=false; if(e.code==='ShiftLeft') move.sprint=false; if(e.code==='KeyC') move.crouch=false; };
         document.addEventListener('mousedown', () => { if(!controls.isLocked) controls.lock(); else fire(); });
