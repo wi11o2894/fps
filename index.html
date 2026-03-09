@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOON FPS: v9.6 HIGH BRIGHTNESS</title>
+    <title>TOON FPS: v9.7 FIXED SCALING</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1a0500; font-family: 'Courier New', monospace; }
         canvas { display: block; width: 100vw; height: 100vh; }
@@ -23,7 +23,7 @@
     <div id="crosshair"></div>
     <div id="health-container"><div id="health-bar"></div></div>
     <div id="gui">
-        <div style="font-weight: bold;">TOON FPS v9.6 BRIGHT</div>
+        <div style="font-weight: bold;">TOON FPS v9.7 RAW</div>
         <div id="my-id" style="font-size: 10px; color: #666;">ID: Connecting...</div>
         <button onclick="copyInvite()" style="background:#ff4757; color:white; border:2px solid black; cursor:pointer; width:100%; margin-top:10px; font-weight:bold; padding:5px;">COPY INVITE</button>
     </div>
@@ -72,13 +72,21 @@
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
         const effect = new OutlineEffect(renderer, { defaultThickness: 0.005 });
         const controls = new PointerLockControls(camera, document.body);
 
-        // --- LIGHTING (BRIGHTER) ---
-        const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2); scene.add(hemi);
-        const sun = new THREE.DirectionalLight(0xffffff, 0.5); sun.position.set(10, 50, 10); scene.add(sun);
+        // Aspect Ratio Fix
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- LIGHTING ---
+        const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.3); scene.add(hemi);
+        const sun = new THREE.DirectionalLight(0xffffff, 0.6); sun.position.set(10, 50, 10); scene.add(sun);
         const rMat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, metalness: 0.1 });
 
         // --- THE MAP ---
@@ -99,14 +107,11 @@
         };
 
         createPlat(20, 1, 20, 0, 4, 0, 0x333333); // Hub
-        createPlat(12, 1, 12, 40, 18, 40, 0x222222); // High Nest
-        createPlat(8, 1, 8, 80, 25, 80, 0x111111); // Crow's Nest (Rope End)
-        
-        // Relocated Tightrope (No Auto-Balance)
+        createPlat(12, 1, 12, 40, 18, 40, 0x222222); 
+        createPlat(8, 1, 8, 80, 25, 80, 0x111111); 
         const rope = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 57), rMat(0xffffff));
         rope.position.set(60, 21.5, 60); rope.rotation.y = Math.PI/4; scene.add(rope); platforms.push(rope);
 
-        // Extra Platforms
         for(let i=0; i<20; i++) {
             createPlat(Math.random()*12+5, 1, Math.random()*12+5, (Math.random()-0.5)*150, Math.random()*30+5, (Math.random()-0.5)*150, Math.random()*0xffffff);
         }
@@ -147,7 +152,7 @@
                 s.position.set(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5); cluster.add(s);
             }
             scene.add(cluster); explosions.push({ m: cluster, t: 0 });
-            const d = camera.getWorldPosition(new THREE.Vector3()).distanceTo(pos);
+            const d = camGroup.position.distanceTo(pos);
             if(d < 15) {
                 shake = Math.max(shake, (15 - d) * 0.35);
                 const p = (15-d); const dir = new THREE.Vector3().subVectors(camGroup.position, pos).normalize();
@@ -160,9 +165,10 @@
             playSynth.fire(); isReloading = true; myRPG.rocket.visible = false;
             document.getElementById('reload-indicator').style.display='block';
             const r = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.4), rMat(0x4d5d2a));
-            r.position.copy(camera.getWorldPosition(new THREE.Vector3()));
-            r.quaternion.copy(camera.getWorldQuaternion(new THREE.Quaternion()));
-            const d = new THREE.Vector3(0,0,-1).applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
+            const worldPos = new THREE.Vector3(); camera.getWorldPosition(worldPos);
+            const worldQuat = new THREE.Quaternion(); camera.getWorldQuaternion(worldQuat);
+            r.position.copy(worldPos); r.quaternion.copy(worldQuat);
+            const d = new THREE.Vector3(0,0,-1).applyQuaternion(worldQuat);
             r.userData = { v: d.multiplyScalar(1.5), life: 300, g: 0.006 };
             scene.add(r); proj.push(r);
             setTimeout(() => { myRPG.rocket.visible=true; isReloading=false; document.getElementById('reload-indicator').style.display='none'; }, 2500);
@@ -201,9 +207,19 @@
 
             if(controls.isLocked && !isDead) {
                 vel.y -= 26 * dt;
-                const spd = move.crouch ? 0.08 : (move.sprint ? 0.35 : 0.18);
+                const spd = (move.crouch ? 0.08 : (move.sprint ? 0.35 : 0.18)) * 60 * dt;
+                
+                // FIXED MOVEMENT LOGIC
+                const forward = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+                forward.y = 0; forward.normalize();
+                const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
+                
+                if(move.f) camGroup.position.addScaledVector(forward, spd);
+                if(move.b) camGroup.position.addScaledVector(forward, -spd);
+                if(move.l) camGroup.position.addScaledVector(right, -spd);
+                if(move.r) camGroup.position.addScaledVector(right, spd);
+
                 document.getElementById('speed-lines').style.opacity = (move.sprint && (move.f||move.b)) ? "1" : "0";
-                controls.moveRight((move.r-move.l)*spd); controls.moveForward((move.f-move.b)*spd);
                 camGroup.position.y += vel.y * dt; camGroup.position.x += vel.x * dt; camGroup.position.z += vel.z * dt;
                 
                 if(camGroup.position.y < -4.5) { isDead=true; document.getElementById('death-screen').style.display='flex'; setTimeout(()=>location.reload(), 1500); }
