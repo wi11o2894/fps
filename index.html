@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toon FPS: Smooth & Stable</title>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
+        canvas { display: block; }
+        #gui { position: absolute; top: 20px; left: 20px; z-index: 10; background: white; border: 4px solid black; padding: 15px; box-shadow: 8px 8px 0px rgba(0,0,0,0.1); }
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; border: 2px solid black; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
+        button { background: #ff4757; color: white; border: 2px solid black; padding: 5px; cursor: pointer; width: 100%; margin-top: 10px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div id="crosshair"></div>
+    <div id="gui">
+        <div style="font-weight: bold;">TOON LOBBY</div>
+        <div id="my-id" style="font-size: 10px; color: #666;">Connecting...</div>
+        <button id="copy-link">SHARE INVITE</button>
+        <div style="font-size: 9px; margin-top: 5px; color: #999;">SHIFT: SPRINT | C: CROUCH</div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "peerjs": "https://esm.sh/peerjs@1.5.2"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+        import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
+        import { Peer } from 'peerjs';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const effect = new OutlineEffect(renderer, { defaultThickness: 0.006 });
+        const controls = new PointerLockControls(camera, document.body);
+        document.addEventListener('click', () => { if(!controls.isLocked) controls.lock(); else fireWeapon(); });
+
+        const toonMat = (color) => new THREE.MeshToonMaterial({ color, side: THREE.DoubleSide });
+
+        // --- WORLD ---
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), toonMat(0x2ed573));
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+
+        const grassGeo = new THREE.PlaneGeometry(0.1, 0.4);
+        const grassMaterial = toonMat(0x26af5b);
+        for (let i = 0; i < 1500; i++) {
+            const blade = new THREE.Mesh(grassGeo, grassMaterial);
+            blade.position.set(Math.random()*60-30, 0.2, Math.random()*60-30);
+            blade.rotation.y = Math.random()*Math.PI;
+            scene.add(blade);
+        }
+
+        scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+        const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+        sun.position.set(10, 20, 10);
+        scene.add(sun);
+
+        // --- PLAYER ---
+        const hand = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), toonMat(0xffdbac));
+        hand.position.set(0.4, -0.4, -0.6);
+        camera.add(hand);
+        const flash = new THREE.PointLight(0xFFD700, 0, 5);
+        camera.add(flash);
+        scene.add(camera);
+
+        function createPlayerModel(color) {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 1, 4, 8), toonMat(color));
+            const visor = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.25, 0.2), toonMat(0x333333));
+            visor.position.set(0, 0.45, -0.3);
+            group.add(body, visor);
+            return group;
+        }
+
+        // --- INPUT & PHYSICS ---
+        let move = { f: false, b: false, l: false, r: false, sprint: false, crouch: false };
+        const vel = new THREE.Vector3();
+        const dir = new THREE.Vector3();
+        let canJump = false;
+        let bobTimer = 0;
+        let currentEyeHeight = 1.6;
+
+        document.onkeydown = (e) => {
+            if (['KeyW','KeyS','KeyA','KeyD','KeyC','Space','ShiftLeft'].includes(e.code)) e.preventDefault();
+            if(e.code==='KeyW') move.f=true; if(e.code==='KeyS') move.b=true;
+            if(e.code==='KeyA') move.l=true; if(e.code==='KeyD') move.r=true;
+            if(e.code==='ShiftLeft') move.sprint = true;
+            if(e.code==='KeyC') move.crouch = true; // CHANGED TO C
+            if(e.code==='Space' && canJump && !move.crouch) { vel.y += 10; canJump = false; }
+        };
+        document.onkeyup = (e) => {
+            if(e.code==='KeyW') move.f=false; if(e.code==='KeyS') move.b=false;
+            if(e.code==='KeyA') move.l=false; if(e.code==='KeyD') move.r=false;
+            if(e.code==='ShiftLeft') move.sprint = false;
+            if(e.code==='KeyC') move.crouch = false; // CHANGED TO C
+        };
+
+        function fireWeapon() {
+            flash.intensity = 10;
+            hand.position.z += 0.05;
+            setTimeout(() => { flash.intensity = 0; hand.position.z -= 0.05; }, 50);
+        }
+
+        // --- P2P NETWORK ---
+        const peer = new Peer();
+        const players = {};
+        peer.on('open', id => {
+            document.getElementById('my-id').innerText = id;
+            const urlJoin = new URLSearchParams(window.location.search).get('join');
+            if(urlJoin) setupConn(peer.connect(urlJoin));
+        });
+        document.getElementById('copy-link').onclick = () => {
+            navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?join=${peer.id}`);
+            alert("Link Copied!");
+        };
+        peer.on('connection', setupConn);
+        function setupConn(c) {
+            c.on('data', d => {
+                if(!players[c.peer]) {
+                    players[c.peer] = { mesh: createPlayerModel(Math.random()*0xffffff), target: new THREE.Vector3(), tRy: 0 };
+                    scene.add(players[c.peer].mesh);
+                }
+                players[c.peer].target.set(d.x, d.y-1.6, d.z);
+                players[c.peer].tRy = d.ry;
+            });
+            setInterval(() => { if(c.open) c.send({ x: camera.position.x, y: camera.position.y, z: camera.position.z, ry: camera.rotation.y }); }, 16);
+        }
+
+        // --- LOOP ---
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = Math.min(clock.getDelta(), 0.1);
+            if (controls.isLocked) {
+                vel.y -= 35 * delta;
+                vel.x -= vel.x * 15.0 * delta;
+                vel.z -= vel.z * 15.0 * delta;
+                dir.z = Number(move.f) - Number(move.b);
+                dir.x = Number(move.r) - Number(move.l);
+                dir.normalize();
+                let currentSpeed = move.crouch ? 50 : (move.sprint ? 240 : 110);
+                if (move.f || move.b) vel.z -= dir.z * currentSpeed * delta;
+                if (move.l || move.r) vel.x -= dir.x * currentSpeed * delta;
+                controls.moveRight(-vel.x * delta);
+                controls.moveForward(-vel.z * delta);
+                
+                const targetHeight = move.crouch ? 0.8 : 1.6;
+                currentEyeHeight = THREE.MathUtils.lerp(currentEyeHeight, targetHeight, 10 * delta);
+                controls.getObject().position.y += (vel.y * delta);
+                if (controls.getObject().position.y <= currentEyeHeight) {
+                    vel.y = 0; controls.getObject().position.y = currentEyeHeight; canJump = true;
+                    if (move.f || move.b || move.l || move.r) {
+                        let bFreq = move.crouch ? 8 : (move.sprint ? 22 : 14);
+                        let bAmt = move.crouch ? 0.01 : (move.sprint ? 0.045 : 0.025);
+                        bobTimer += delta * bFreq;
+                        controls.getObject().position.y += Math.sin(bobTimer) * bAmt;
+                    }
+                }
+            }
+            for (let id in players) {
+                players[id].mesh.position.lerp(players[id].target, 0.2);
+                players[id].mesh.rotation.y = players[id].tRy;
+            }
+            effect.render(scene, camera);
+        }
+        animate();
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
