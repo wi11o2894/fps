@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOON FPS: v9.5 MEGA-MAP</title>
+    <title>TOON FPS: v9.6 HIGH BRIGHTNESS</title>
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #050100; font-family: 'Courier New', monospace; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1a0500; font-family: 'Courier New', monospace; }
         canvas { display: block; width: 100vw; height: 100vh; }
-        #gui { position: absolute; top: 20px; left: 20px; z-index: 10; background: rgba(255,255,255,0.9); border: 4px solid black; padding: 15px; box-shadow: 8px 8px 0px rgba(0,0,0,0.2); }
+        #gui { position: absolute; top: 20px; left: 20px; z-index: 10; background: rgba(255,255,255,0.95); border: 4px solid black; padding: 15px; box-shadow: 8px 8px 0px rgba(0,0,0,0.2); }
         #crosshair { position: absolute; top: 50%; left: 50%; width: 14px; height: 14px; border: 2px solid black; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
         #reload-indicator { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); font-weight: bold; color: #ff4757; display: none; text-shadow: 2px 2px 0px black; font-size: 24px; }
         #health-container { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 300px; height: 25px; border: 4px solid black; background: #333; z-index: 10; }
@@ -17,13 +17,13 @@
     </style>
 </head>
 <body>
-    <div id="death-screen"><h1>CRITICAL HEAT</h1><p>RESPAWNING ABOVE HUB...</p></div>
-    <div id="reload-indicator">LOADING ROCKET...</div>
+    <div id="death-screen"><h1>INCINERATED</h1><p>RESPAWNING...</p></div>
+    <div id="reload-indicator">RELOADING ROCKET...</div>
     <div id="speed-lines"></div>
     <div id="crosshair"></div>
     <div id="health-container"><div id="health-bar"></div></div>
     <div id="gui">
-        <div style="font-weight: bold;">TOON FPS v9.5 MEGA</div>
+        <div style="font-weight: bold;">TOON FPS v9.6 BRIGHT</div>
         <div id="my-id" style="font-size: 10px; color: #666;">ID: Connecting...</div>
         <button onclick="copyInvite()" style="background:#ff4757; color:white; border:2px solid black; cursor:pointer; width:100%; margin-top:10px; font-weight:bold; padding:5px;">COPY INVITE</button>
     </div>
@@ -65,10 +65,9 @@
         };
 
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0a0200);
+        scene.background = new THREE.Color(0x2a0800);
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 2000);
         const camGroup = new THREE.Group(); camGroup.add(camera); scene.add(camGroup);
-        // Correct Spawn Position
         camGroup.position.set(0, 10, 0); 
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -77,19 +76,19 @@
         const effect = new OutlineEffect(renderer, { defaultThickness: 0.005 });
         const controls = new PointerLockControls(camera, document.body);
 
-        // --- SHADER / LIGHTING FIX ---
-        const ambient = new THREE.AmbientLight(0xffffff, 0.4); scene.add(ambient);
-        const sun = new THREE.DirectionalLight(0xffffff, 0.8); sun.position.set(5, 20, 10); scene.add(sun);
-        const rMat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.7, metalness: 0.2 });
+        // --- LIGHTING (BRIGHTER) ---
+        const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2); scene.add(hemi);
+        const sun = new THREE.DirectionalLight(0xffffff, 0.5); sun.position.set(10, 50, 10); scene.add(sun);
+        const rMat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, metalness: 0.1 });
 
-        // --- THE MASSIVE MAP ---
+        // --- THE MAP ---
         const platforms = [], ladders = [], bubbles = [];
-        const lavaFloor = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshBasicMaterial({ color: 0xff3300 }));
-        lavaFloor.rotation.x = -Math.PI/2; lavaFloor.position.y = -5; scene.add(lavaFloor);
+        const lavaFloor = new THREE.Mesh(new THREE.PlaneGeometry(800, 800), new THREE.MeshBasicMaterial({ color: 0xff3300 }));
+        lavaFloor.rotation.x = -Math.PI/2; lavaFloor.position.y = -5.5; scene.add(lavaFloor);
 
         for(let i=0; i<100; i++) {
-            const b = new THREE.Mesh(new THREE.SphereGeometry(Math.random()*0.7+0.3, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff5500 }));
-            b.position.set(Math.random()*300-150, -5.2, Math.random()*300-150);
+            const b = new THREE.Mesh(new THREE.SphereGeometry(Math.random()*0.8+0.4, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff6600 }));
+            b.position.set(Math.random()*400-200, -5.7, Math.random()*400-200);
             b.userData = { speed: Math.random()*0.02+0.01, phase: Math.random()*Math.PI*2 };
             scene.add(b); bubbles.push(b);
         }
@@ -99,35 +98,30 @@
             m.position.set(x,y,z); scene.add(m); platforms.push(m);
         };
 
-        // Core Platforms
-        createPlat(20, 1, 20, 0, 4, 0, 0x333333); // Spawn Hub
-        createPlat(12, 1, 12, 30, 12, 30, 0x222222); // High
-        createPlat(12, 1, 12, -30, 8, -30, 0x222222); // Mid
+        createPlat(20, 1, 20, 0, 4, 0, 0x333333); // Hub
+        createPlat(12, 1, 12, 40, 18, 40, 0x222222); // High Nest
+        createPlat(8, 1, 8, 80, 25, 80, 0x111111); // Crow's Nest (Rope End)
         
-        // Random "Tons More" Platforms
-        for(let i=0; i<15; i++) {
-            const rw = Math.random()*10+5, rd = Math.random()*10+5;
-            const rx = (Math.random()-0.5)*100, ry = Math.random()*25+5, rz = (Math.random()-0.5)*100;
-            createPlat(rw, 1, rd, rx, ry, rz, Math.random()*0xffffff);
-        }
+        // Relocated Tightrope (No Auto-Balance)
+        const rope = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 57), rMat(0xffffff));
+        rope.position.set(60, 21.5, 60); rope.rotation.y = Math.PI/4; scene.add(rope); platforms.push(rope);
 
-        const bridge = new THREE.Mesh(new THREE.BoxGeometry(30, 0.3, 4), rMat(0x555555));
-        bridge.position.set(15, 4, 0); scene.add(bridge); platforms.push(bridge);
-        
-        const rope = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 50), rMat(0xdddddd));
-        rope.position.set(-15, 8, -15); rope.rotation.y = Math.PI/4; scene.add(rope); platforms.push(rope);
+        // Extra Platforms
+        for(let i=0; i<20; i++) {
+            createPlat(Math.random()*12+5, 1, Math.random()*12+5, (Math.random()-0.5)*150, Math.random()*30+5, (Math.random()-0.5)*150, Math.random()*0xffffff);
+        }
 
         const createLadder = (x, z, h) => {
             const g = new THREE.Group();
             for(let i=0; i<h; i+=0.5){
-                const s = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.1, 0.2), rMat(0x888888));
+                const s = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.1, 0.2), rMat(0x999999));
                 s.position.y = i; g.add(s);
             }
             g.position.set(x, 0, z); scene.add(g); ladders.push({x, z, h});
         };
-        createLadder(30, 24, 12.5); // Ladder to High platform
+        createLadder(40, 34, 18.5);
 
-        // --- RPG MODEL (RESTORED COLORS) ---
+        // --- RPG ---
         function createRPG() {
             const g = new THREE.Group();
             const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.2), rMat(0x1a1a1a)); tube.rotation.x = Math.PI/2;
@@ -140,7 +134,7 @@
         }
         const myRPG = createRPG(); myRPG.g.position.set(0.4,-0.4,-0.7); camera.add(myRPG.g);
 
-        // --- GAMEPLAY ---
+        // --- PHYSICS ---
         let health = 100, isDead = false, isReloading = false, vel = new THREE.Vector3(), shake = 0;
         let move = { f:0, b:0, l:0, r:0, sprint: false, crouch: false };
         let proj = [], explosions = [];
@@ -149,15 +143,15 @@
             playSynth.explosion();
             const cluster = new THREE.Group(); cluster.position.copy(pos);
             for(let i=0; i<12; i++) {
-                const s = new THREE.Mesh(new THREE.SphereGeometry(1.0, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff7700, transparent: true }));
+                const s = new THREE.Mesh(new THREE.SphereGeometry(1.0, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true }));
                 s.position.set(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5); cluster.add(s);
             }
             scene.add(cluster); explosions.push({ m: cluster, t: 0 });
             const d = camera.getWorldPosition(new THREE.Vector3()).distanceTo(pos);
             if(d < 15) {
-                shake = Math.max(shake, (15 - d) * 0.3);
+                shake = Math.max(shake, (15 - d) * 0.35);
                 const p = (15-d); const dir = new THREE.Vector3().subVectors(camGroup.position, pos).normalize();
-                vel.x += dir.x * p * 8; vel.z += dir.z * p * 8; vel.y += p * 5;
+                vel.x += dir.x * p * 8; vel.z += dir.z * p * 8; vel.y += p * 5.5;
             }
         }
 
@@ -169,7 +163,7 @@
             r.position.copy(camera.getWorldPosition(new THREE.Vector3()));
             r.quaternion.copy(camera.getWorldQuaternion(new THREE.Quaternion()));
             const d = new THREE.Vector3(0,0,-1).applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
-            r.userData = { v: d.multiplyScalar(1.4), life: 300, g: 0.006 };
+            r.userData = { v: d.multiplyScalar(1.5), life: 300, g: 0.006 };
             scene.add(r); proj.push(r);
             setTimeout(() => { myRPG.rocket.visible=true; isReloading=false; document.getElementById('reload-indicator').style.display='none'; }, 2500);
         }
@@ -183,7 +177,7 @@
             bubbles.forEach(b => {
                 b.position.y += b.userData.speed;
                 b.scale.setScalar(1 + Math.sin(time + b.userData.phase)*0.3);
-                if(b.position.y > -4.0) b.position.y = -5.5;
+                if(b.position.y > -4.5) b.position.y = -6.0;
             });
 
             if(shake > 0) {
@@ -196,7 +190,7 @@
                 p.userData.v.y -= p.userData.g; p.position.add(p.userData.v);
                 p.lookAt(p.position.clone().add(p.userData.v)); p.rotateX(Math.PI/2);
                 platforms.forEach(pl => { if(new THREE.Box3().setFromObject(pl).containsPoint(p.position)) p.userData.life = 0; });
-                if(p.position.y < -4.5 || p.userData.life <= 0) { doExplode(p.position); scene.remove(p); proj.splice(i,1); }
+                if(p.position.y < -5.0 || p.userData.life <= 0) { doExplode(p.position); scene.remove(p); proj.splice(i,1); }
             });
 
             explosions.forEach((ex,i) => {
@@ -212,10 +206,7 @@
                 controls.moveRight((move.r-move.l)*spd); controls.moveForward((move.f-move.b)*spd);
                 camGroup.position.y += vel.y * dt; camGroup.position.x += vel.x * dt; camGroup.position.z += vel.z * dt;
                 
-                if(camGroup.position.y < -3.8) { 
-                    isDead=true; document.getElementById('death-screen').style.display='flex'; 
-                    setTimeout(()=>location.reload(), 1500); 
-                }
+                if(camGroup.position.y < -4.5) { isDead=true; document.getElementById('death-screen').style.display='flex'; setTimeout(()=>location.reload(), 1500); }
                 
                 platforms.forEach(p => {
                     const b = new THREE.Box3().setFromObject(p);
@@ -223,7 +214,7 @@
                         if(vel.y < 0) { camGroup.position.y = p.position.y + (p.geometry.parameters.height/2) + (move.crouch?1:1.7); vel.y = 0; }
                     }
                 });
-                ladders.forEach(l => { if(new THREE.Vector2(camGroup.position.x, camGroup.position.z).distanceTo(new THREE.Vector2(l.x, l.z)) < 1.5 && move.f) vel.y = 7; });
+                ladders.forEach(l => { if(new THREE.Vector2(camGroup.position.x, camGroup.position.z).distanceTo(new THREE.Vector2(l.x, l.z)) < 1.6 && move.f) vel.y = 7.5; });
                 vel.x *= 0.96; vel.z *= 0.96;
             }
             effect.render(scene, camera);
