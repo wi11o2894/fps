@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOON FPS: v6.6 GREEN ROCKET</title>
+    <title>TOON FPS: v6.7 WEAPON SYNC</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
         canvas { display: block; }
@@ -22,11 +22,10 @@
     <div id="crosshair"></div>
     <div id="health-container"><div id="health-bar"></div></div>
     <div id="gui">
-        <div style="font-weight: bold;">TOON FPS v6.6</div>
+        <div style="font-weight: bold;">TOON FPS v6.7</div>
         <div id="my-id" style="font-size: 10px; color: #666;">ID: Connecting...</div>
         <div id="status" style="font-size: 10px; color: #2ed573;">Waiting for players...</div>
         <button id="copy-link">SHARE INVITE</button>
-        <div style="font-size: 9px; margin-top: 5px; color: #999;">SHIFT: SPRINT | C: CROUCH | CLICK: RPG</div>
     </div>
 
     <script type="importmap">
@@ -57,11 +56,11 @@
         const controls = new PointerLockControls(camera, document.body);
         const toonMat = (color) => new THREE.MeshToonMaterial({ color, side: THREE.DoubleSide });
 
-        // Environment
+        // World
         const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), toonMat(0x2ed573));
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
-        for (let i = 0; i < 1000; i++) {
+        for (let i = 0; i < 800; i++) {
             const blade = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.4), toonMat(0x26af5b));
             blade.position.set(Math.random()*60-30, 0.2, Math.random()*60-30);
             blade.rotation.y = Math.random()*Math.PI;
@@ -72,29 +71,22 @@
         sun.position.set(10, 20, 10);
         scene.add(sun);
 
-        // --- RPG-7 VIEW MODEL ---
+        // --- VIEW MODEL (FIRST PERSON) ---
         const rpgGroup = new THREE.Group();
         const tubeMain = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.2, 12), toonMat(0x333333));
         tubeMain.rotation.x = Math.PI / 2;
         const heatShield = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.45, 12), toonMat(0x8B4513));
-        heatShield.rotation.x = Math.PI / 2;
-        heatShield.position.z = 0.1;
+        heatShield.rotation.x = Math.PI / 2; heatShield.position.z = 0.1;
         const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.12, 0.2, 12), toonMat(0x333333));
-        exhaust.rotation.x = Math.PI / 2;
-        exhaust.position.z = 0.55;
+        exhaust.rotation.x = Math.PI / 2; exhaust.position.z = 0.55;
         const grip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.2, 0.08), toonMat(0x222222));
         grip.position.set(0, -0.15, -0.1);
-
-        // The Toon Rocket (Green)
         const loadedRocket = new THREE.Group();
-        const rHead = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 12), toonMat(0x4b6332)); // Earth-tone Green
-        rHead.rotation.x = -Math.PI / 2;
-        rHead.position.z = -0.65;
-        const rShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.4, 12), toonMat(0x6b8e23)); // Olive Drab Green
-        rShaft.rotation.x = Math.PI / 2;
-        rShaft.position.z = -0.45;
+        const rHead = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 12), toonMat(0x4b6332));
+        rHead.rotation.x = -Math.PI / 2; rHead.position.z = -0.65;
+        const rShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.4, 12), toonMat(0x6b8e23));
+        rShaft.rotation.x = Math.PI / 2; rShaft.position.z = -0.45;
         loadedRocket.add(rHead, rShaft);
-
         rpgGroup.add(tubeMain, heatShield, exhaust, grip, loadedRocket);
         rpgGroup.position.set(0.45, -0.45, -0.7);
         camera.add(rpgGroup);
@@ -103,58 +95,62 @@
         camera.add(flash);
         scene.add(camera);
 
-        // --- STATE & PHYSICS ---
-        let health = 100, isDead = false, isReloading = false, vel = new THREE.Vector3(), bobTimer = 0, currentEyeHeight = 1.6;
-        let move = { f: false, b: false, l: false, r: false, sprint: false, crouch: false };
-        let projectiles = [], explosions = [];
-        const speedLinesEl = document.getElementById('speed-lines');
-
+        // --- PLAYER MODEL (THIRD PERSON) ---
         function createPlayerModel(color) {
             const group = new THREE.Group();
             const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 1, 4, 8), toonMat(color));
             const visor = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.25, 0.2), toonMat(0x333333));
             visor.position.set(0, 0.45, -0.3);
-            group.add(body, visor);
-            return group;
+            
+            // Attached RPG for others to see
+            const tpRPG = new THREE.Group();
+            const tpTube = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1, 8), toonMat(0x333333));
+            tpTube.rotation.x = Math.PI / 2;
+            const tpShield = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.4, 8), toonMat(0x8B4513));
+            tpShield.rotation.x = Math.PI / 2;
+            tpRPG.add(tpTube, tpShield);
+            tpRPG.position.set(0.4, 0, -0.4);
+            
+            const tpFlash = new THREE.PointLight(0xFFD700, 0, 3);
+            tpFlash.position.set(0, 0, -0.6);
+            tpRPG.add(tpFlash);
+
+            group.add(body, visor, tpRPG);
+            return { group, flash: tpFlash };
         }
+
+        // --- STATE ---
+        let health = 100, isDead = false, isReloading = false, vel = new THREE.Vector3(), bobTimer = 0, currentEyeHeight = 1.6;
+        let move = { f: false, b: false, l: false, r: false, sprint: false, crouch: false };
+        let projectiles = [], explosions = [];
+        const speedLinesEl = document.getElementById('speed-lines');
 
         function fireRPG() {
             if(isDead || !controls.isLocked || isReloading) return;
             isReloading = true;
             loadedRocket.visible = false;
             flash.intensity = 15;
-            rpgGroup.position.z += 0.25;
-            rpgGroup.rotation.x -= 0.15;
+            rpgGroup.position.z += 0.25; rpgGroup.rotation.x -= 0.15;
 
-            // Green Rocket Projectile
             const rocket = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.4), toonMat(0x6b8e23));
-            rocket.position.copy(camera.position);
-            rocket.quaternion.copy(camera.quaternion);
+            rocket.position.copy(camera.position); rocket.quaternion.copy(camera.quaternion);
             const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
             rocket.userData = { velocity: dir.multiplyScalar(0.75), life: 120 };
-            scene.add(rocket);
-            projectiles.push(rocket);
+            scene.add(rocket); projectiles.push(rocket);
             
-            Object.values(connections).forEach(c => { if(c.open) c.send({ type: 'rpc_fire', x: rocket.position.x, y: rocket.position.y, z: rocket.position.z }); });
+            Object.values(connections).forEach(c => { if(c.open) c.send({ type: 'rpc_fire' }); });
             setTimeout(() => { flash.intensity = 0; }, 50);
             
+            // Reload sequence
             setTimeout(() => {
                 const drop = setInterval(() => {
-                    rpgGroup.position.y -= 0.06;
-                    rpgGroup.rotation.z += 0.02;
+                    rpgGroup.position.y -= 0.06; rpgGroup.rotation.z += 0.02;
                     if(rpgGroup.position.y < -1.2) {
-                        clearInterval(drop);
-                        loadedRocket.visible = true; 
-                        rpgGroup.position.z = -0.7;
-                        rpgGroup.rotation.x = 0;
-                        rpgGroup.rotation.z = 0;
+                        clearInterval(drop); loadedRocket.visible = true; 
+                        rpgGroup.position.z = -0.7; rpgGroup.rotation.x = 0; rpgGroup.rotation.z = 0;
                         const rise = setInterval(() => {
                             rpgGroup.position.y += 0.06;
-                            if(rpgGroup.position.y >= -0.45) {
-                                rpgGroup.position.y = -0.45;
-                                clearInterval(rise);
-                                isReloading = false;
-                            }
+                            if(rpgGroup.position.y >= -0.45) { rpgGroup.position.y = -0.45; clearInterval(rise); isReloading = false; }
                         }, 16);
                     }
                 }, 16);
@@ -170,7 +166,7 @@
             }
             scene.add(group); explosions.push({ mesh: group, time: 0 });
             if(camera.position.distanceTo(pos) < 5) vel.y += (5 - camera.position.distanceTo(pos)) * 12;
-            Object.keys(players).forEach(id => { if(players[id].mesh.position.distanceTo(pos) < 5) connections[id].send({ type: 'hit', damage: 35 }); });
+            Object.keys(players).forEach(id => { if(players[id].group.position.distanceTo(pos) < 5) connections[id].send({ type: 'hit', damage: 35 }); });
         }
 
         // --- NETWORKING ---
@@ -185,11 +181,12 @@
             c.on('open', () => { connections[c.peer] = c; document.getElementById('status').innerText = `Connected: ${Object.keys(connections).length} player(s)`; });
             c.on('data', d => {
                 if(d.type === 'hit') { health -= d.damage; if(health<=0 && !isDead) die(); updateUI(); }
+                else if(d.type === 'rpc_fire') { if(players[c.peer]) { players[c.peer].flash.intensity = 15; setTimeout(()=>players[c.peer].flash.intensity=0, 50); }}
                 else {
                     if(!players[c.peer]) {
-                        const m = createPlayerModel(Math.random()*0xffffff);
-                        players[c.peer] = { mesh: m, target: new THREE.Vector3(), tRot: 0 };
-                        scene.add(m);
+                        const pData = createPlayerModel(Math.random()*0xffffff);
+                        players[c.peer] = { ...pData, target: new THREE.Vector3(), tRot: 0 };
+                        scene.add(players[c.peer].group);
                     }
                     players[c.peer].target.set(d.x, d.y - 1.6, d.z); players[c.peer].tRot = d.ry;
                 }
@@ -203,7 +200,7 @@
         function respawn() { isDead = false; health = 100; updateUI(); document.getElementById('death-screen').style.display = 'none'; camera.position.set(0, 1.6, 0); controls.lock(); }
         function updateUI() { document.getElementById('health-bar').style.width = health + "%"; }
 
-        // --- INPUT & LOOP ---
+        // --- LOOP ---
         window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
         document.addEventListener('mousedown', () => { if(!controls.isLocked) controls.lock(); else fireRPG(); });
         document.onkeydown = (e) => {
@@ -241,7 +238,10 @@
                     }
                 }
             }
-            for(let id in players) { players[id].mesh.position.lerp(players[id].target, 0.2); players[id].mesh.rotation.y = THREE.MathUtils.lerp(players[id].mesh.rotation.y, players[id].tRot, 0.2); }
+            for(let id in players) { 
+                players[id].group.position.lerp(players[id].target, 0.2); 
+                players[id].group.rotation.y = THREE.MathUtils.lerp(players[id].group.rotation.y, players[id].tRot, 0.2); 
+            }
             effect.render(scene, camera);
         }
         animate();
