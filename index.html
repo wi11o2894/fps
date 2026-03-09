@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOON FPS: v7.1 ROUNDED JOINTS</title>
+    <title>TOON FPS: v7.2 JOINT FIX</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
         canvas { display: block; }
@@ -22,7 +22,7 @@
     <div id="crosshair"></div>
     <div id="health-container"><div id="health-bar"></div></div>
     <div id="gui">
-        <div style="font-weight: bold;">TOON FPS v7.1</div>
+        <div style="font-weight: bold;">TOON FPS v7.2</div>
         <div id="my-id" style="font-size: 10px; color: #666;">ID: Connecting...</div>
         <div id="status" style="font-size: 10px; color: #2ed573;">Waiting for players...</div>
         <button id="copy-link">SHARE INVITE</button>
@@ -56,11 +56,11 @@
         const controls = new PointerLockControls(camera, document.body);
         const toonMat = (color) => new THREE.MeshToonMaterial({ color });
 
-        // World Setup
+        // World
         const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), toonMat(0x2ed573));
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
-        for (let i = 0; i < 400; i++) {
+        for (let i = 0; i < 300; i++) {
             const blade = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.4), toonMat(0x26af5b));
             blade.position.set(Math.random()*60-30, 0.2, Math.random()*60-30);
             blade.rotation.y = Math.random()*Math.PI;
@@ -95,15 +95,13 @@
         camera.add(flash);
         scene.add(camera);
 
-        // --- ROUNDED TABS PLAYER MODEL ---
+        // --- TABS MODEL FIX ---
         function createPlayerModel(color) {
             const group = new THREE.Group();
             
-            // Rounded Torso
             const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.25, 0.5, 4, 8), toonMat(color));
             torso.position.y = 1.05;
 
-            // Rounded Head
             const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), toonMat(0xeeeeee));
             head.position.y = 1.55;
             const visor = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.1, 4, 8), toonMat(0x111111));
@@ -111,7 +109,6 @@
             visor.position.set(0, 0.05, -0.18);
             head.add(visor);
 
-            // Function to create jointed limb
             const createLimb = (isLeg) => {
                 const limbGroup = new THREE.Group();
                 const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.25, 4, 8), toonMat(isLeg ? 0x222222 : color));
@@ -132,7 +129,6 @@
             const armL = createLimb(false); armL.root.position.set(-0.35, 1.3, 0);
             const armR = createLimb(false); armR.root.position.set(0.35, 1.3, 0);
 
-            // TP RPG
             const tpRPG = new THREE.Group();
             tpRPG.add(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.8), toonMat(0x333333)));
             tpRPG.rotation.x = Math.PI/2;
@@ -156,16 +152,13 @@
             if(isDead || !controls.isLocked || isReloading) return;
             isReloading = true; loadedRocket.visible = false; flash.intensity = 15;
             rpgGroup.position.z += 0.25; rpgGroup.rotation.x -= 0.15;
-
             const rocket = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.4), toonMat(0x6b8e23));
             rocket.position.copy(camera.position); rocket.quaternion.copy(camera.quaternion);
             const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
             rocket.userData = { velocity: dir.multiplyScalar(0.75), life: 120 };
             scene.add(rocket); projectiles.push(rocket);
-            
             Object.values(connections).forEach(c => { if(c.open) c.send({ type: 'rpc_fire' }); });
             setTimeout(() => { flash.intensity = 0; }, 50);
-            
             setTimeout(() => {
                 const drop = setInterval(() => {
                     rpgGroup.position.y -= 0.06; rpgGroup.rotation.z += 0.02;
@@ -195,11 +188,7 @@
 
         // --- NETWORKING ---
         const peer = new Peer(); const players = {}; const connections = {};
-        peer.on('open', id => {
-            document.getElementById('my-id').innerText = "ID: " + id;
-            const urlJoin = new URLSearchParams(window.location.search).get('join');
-            if(urlJoin) setupConn(peer.connect(urlJoin));
-        });
+        peer.on('open', id => { document.getElementById('my-id').innerText = "ID: " + id; const urlJoin = new URLSearchParams(window.location.search).get('join'); if(urlJoin) setupConn(peer.connect(urlJoin)); });
         peer.on('connection', setupConn);
         function setupConn(c) {
             c.on('open', () => { connections[c.peer] = c; document.getElementById('status').innerText = `Connected: ${Object.keys(connections).length} player(s)`; });
@@ -220,9 +209,7 @@
         }
         setInterval(() => { 
             const isMoving = move.f || move.b || move.l || move.r;
-            Object.values(connections).forEach(c => { 
-                if(c.open) c.send({ x: camera.position.x, y: camera.position.y, z: camera.position.z, ry: camera.rotation.y, moving: isMoving }); 
-            }); 
+            Object.values(connections).forEach(c => { if(c.open) c.send({ x: camera.position.x, y: camera.position.y, z: camera.position.z, ry: camera.rotation.y, moving: isMoving }); }); 
         }, 16);
         document.getElementById('copy-link').onclick = () => { const link = `${window.location.origin}${window.location.pathname}?join=${peer.id}`; navigator.clipboard.writeText(link); alert("Invite Copied!"); };
 
@@ -263,38 +250,35 @@
                 if (camera.position.y <= currentEyeHeight) { camera.position.y = currentEyeHeight; vel.y = 0; }
             }
             
-            // JOINTED TABS ANIMATIONS
             for(let id in players) { 
                 const p = players[id];
                 p.group.position.lerp(p.target, 0.2); 
-                p.group.rotation.y = THREE.MathUtils.lerp(p.group.rotation.y, p.tRot, 0.2); 
+                // Fix orientation: Ensure model faces the correct direction
+                p.group.rotation.y = p.tRot + Math.PI; 
                 
                 if(p.moving) {
                     p.anim += delta * 12;
                     const swing = Math.sin(p.anim) * 0.8;
-                    const kneeBend = Math.abs(Math.cos(p.anim)) * 0.6;
+                    // Fix: Joint logic - Knee/Elbow bend forward only
+                    const jointBend = Math.max(0, Math.cos(p.anim)) * 0.7;
                     
-                    // Legs with knees
                     p.legL.root.rotation.x = swing;
-                    p.legL.lower.rotation.x = kneeBend;
+                    p.legL.lower.rotation.x = jointBend;
                     p.legR.root.rotation.x = -swing;
-                    p.legR.lower.rotation.x = kneeBend;
+                    p.legR.lower.rotation.x = Math.max(0, Math.cos(p.anim + Math.PI)) * 0.7;
                     
-                    // Arms with elbows
                     p.armL.root.rotation.x = -swing * 0.5;
-                    p.armL.lower.rotation.x = -0.4;
+                    p.armL.lower.rotation.x = -0.4; // Slightly bent forward
                     p.armR.root.rotation.x = swing * 0.5;
                     p.armR.lower.rotation.x = -0.4;
                     
-                    p.torso.rotation.x = Math.sin(p.anim * 0.5) * 0.2 + 0.1;
-                    p.head.rotation.z = Math.sin(p.anim) * 0.1;
+                    p.torso.rotation.x = Math.sin(p.anim * 0.5) * 0.1 + 0.1;
                 } else {
                     [p.legL, p.legR, p.armL, p.armR].forEach(l => {
                         l.root.rotation.x = THREE.MathUtils.lerp(l.root.rotation.x, 0, 5*delta);
                         l.lower.rotation.x = THREE.MathUtils.lerp(l.lower.rotation.x, 0, 5*delta);
                     });
                     p.torso.rotation.x = THREE.MathUtils.lerp(p.torso.rotation.x, 0, 5*delta);
-                    p.head.rotation.z = THREE.MathUtils.lerp(p.head.rotation.z, 0, 5*delta);
                 }
             }
             effect.render(scene, camera);
