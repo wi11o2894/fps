@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOON FPS: v11.0 MULTIPLAYER</title>
+    <title>TOON FPS: v11.1 THE COMPLETE EDITION</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1a0500; font-family: 'Courier New', monospace; }
         canvas { display: block; width: 100vw; height: 100vh; }
@@ -11,19 +11,20 @@
         #crosshair { position: absolute; top: 50%; left: 50%; width: 14px; height: 14px; border: 2px solid black; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
         #reload-indicator { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); font-weight: bold; color: #ff4757; display: none; text-shadow: 2px 2px 0px black; font-size: 24px; }
         #death-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,69,0,0.8); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; color: white; text-shadow: 5px 5px 0px black; }
+        #speed-lines { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; opacity: 0; background: radial-gradient(circle, transparent 25%, rgba(255,255,255,0.4) 100%); mask-image: repeating-conic-gradient(from 0deg, black 0deg 2deg, transparent 2deg 15deg); -webkit-mask-image: repeating-conic-gradient(from 0deg, black 0deg 2deg, transparent 2deg 15deg); transition: opacity 0.1s; }
         input { width: 100%; margin-top: 10px; border: 2px solid black; padding: 5px; box-sizing: border-box; font-family: inherit; }
         button { width: 100%; margin-top: 5px; background: #2ed573; color: white; border: 2px solid black; padding: 8px; font-weight: bold; cursor: pointer; font-family: inherit; }
-        button:active { background: #26af5d; transform: translateY(2px); }
     </style>
 </head>
 <body>
     <div id="death-screen"><h1>INCINERATED</h1><p>RESPAWNING...</p></div>
     <div id="reload-indicator">RELOADING ROCKET...</div>
+    <div id="speed-lines"></div>
     <div id="crosshair"></div>
     <div id="gui">
-        <div style="font-weight: bold;">TOON FPS v11.0</div>
-        <div id="my-id" style="font-size: 10px; color: #666; word-break: break-all; margin-bottom: 5px;">ID: Connecting...</div>
-        <input type="text" id="join-id" placeholder="Enter Friend's ID...">
+        <div style="font-weight: bold;">TOON FPS v11.1</div>
+        <div id="my-id" style="font-size: 10px; color: #666; word-break: break-all;">ID: Connecting...</div>
+        <input type="text" id="join-id" placeholder="Paste Friend's ID...">
         <button id="join-btn">JOIN SESSION</button>
     </div>
 
@@ -47,51 +48,54 @@
         const peer = new Peer();
         let connections = [];
         let remotePlayers = {};
-
         peer.on('open', (id) => { document.getElementById('my-id').innerText = "ID: " + id; });
-        peer.on('connection', (conn) => setupConnection(conn));
-
+        peer.on('connection', (conn) => setupConn(conn));
         document.getElementById('join-btn').onclick = () => {
-            const targetId = document.getElementById('join-id').value;
-            if (targetId) setupConnection(peer.connect(targetId));
+            const id = document.getElementById('join-id').value;
+            if(id) setupConn(peer.connect(id));
         };
-
-        function setupConnection(conn) {
+        function setupConn(conn) {
             conn.on('open', () => {
-                if (!connections.find(c => c.peer === conn.peer)) connections.push(conn);
+                if(!connections.find(c => c.peer === conn.peer)) connections.push(conn);
                 conn.on('data', (data) => {
-                    if (data.type === 'move') updateRemotePlayer(conn.peer, data);
+                    if(data.type === 'move') {
+                        if(!remotePlayers[conn.peer]) {
+                            remotePlayers[conn.peer] = createRemoteChar();
+                            scene.add(remotePlayers[conn.peer]);
+                        }
+                        remotePlayers[conn.peer].position.copy(data.pos);
+                        remotePlayers[conn.peer].quaternion.copy(data.quat);
+                    }
                 });
             });
-            conn.on('close', () => removeRemotePlayer(conn.peer));
+        }
+        function createRemoteChar() {
+            const g = new THREE.Group();
+            const b = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 1), rMat(0x3498db));
+            const h = new THREE.Mesh(new THREE.SphereGeometry(0.3), rMat(0xffdbac)); h.position.y = 0.8;
+            g.add(b, h); return g;
         }
 
-        function createPlayerMesh() {
-            const group = new THREE.Group();
-            const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 1, 4, 8), rMat(0x3498db));
-            const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), rMat(0xffdbac));
-            head.position.y = 0.8;
-            const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.2), rMat(0x1a1a1a));
-            gun.rotation.x = Math.PI/2; gun.position.set(0.4, 0.2, -0.4);
-            group.add(body, head, gun);
-            scene.add(group);
-            return group;
-        }
-
-        function updateRemotePlayer(id, data) {
-            if (!remotePlayers[id]) remotePlayers[id] = createPlayerMesh();
-            remotePlayers[id].position.copy(data.pos);
-            remotePlayers[id].quaternion.copy(data.quat);
-        }
-
-        function removeRemotePlayer(id) {
-            if (remotePlayers[id]) {
-                scene.remove(remotePlayers[id]);
-                delete remotePlayers[id];
+        // --- AUDIO & ASSETS ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const playSynth = {
+            fire: () => {
+                const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+                o.type = 'triangle'; o.frequency.setValueAtTime(140, audioCtx.currentTime);
+                o.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.2);
+                g.gain.setValueAtTime(0.2, audioCtx.currentTime); g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+                o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + 0.2);
+            },
+            explosion: () => {
+                const b = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.5, audioCtx.sampleRate);
+                const d = b.getChannelData(0); for(let i=0; i<b.length; i++) d[i] = Math.random()*2-1;
+                const s = audioCtx.createBufferSource(); s.buffer = b;
+                const f = audioCtx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(400, audioCtx.currentTime);
+                const g = audioCtx.createGain(); g.gain.setValueAtTime(0.4, audioCtx.currentTime); g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+                s.connect(f); f.connect(g); g.connect(audioCtx.destination); s.start();
             }
-        }
+        };
 
-        // --- WORLD & PHYSICS (RETAINED FROM v10.3) ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x2a0800);
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 2000);
@@ -106,136 +110,153 @@
 
         const rMat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, metalness: 0.1 });
         const platforms = [], ladders = [], bubbles = [];
-        
-        // Lava and Platforms
-        const lava = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshBasicMaterial({ color: 0xff3300 }));
-        lava.rotation.x = -Math.PI/2; lava.position.y = -5.5; scene.add(lava);
 
-        for(let i=0; i<45; i++) {
-            const m = new THREE.Mesh(new THREE.BoxGeometry(Math.random()*10+6, 1, Math.random()*10+6), rMat(Math.random()*0xffffff));
-            m.position.set((Math.random()-0.5)*180, Math.random()*35+4, (Math.random()-0.5)*180);
-            scene.add(m); platforms.push(m);
+        // LAVA & BUBBLES
+        const lavaFloor = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshBasicMaterial({ color: 0xff3300 }));
+        lavaFloor.rotation.x = -Math.PI/2; lavaFloor.position.y = -5.5; scene.add(lavaFloor);
+        for(let i=0; i<60; i++) {
+            const b = new THREE.Mesh(new THREE.SphereGeometry(Math.random()*0.6+0.4, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff6600 }));
+            b.position.set(Math.random()*400-200, -5.7, Math.random()*400-200);
+            b.userData = { speed: Math.random()*0.02+0.01, phase: Math.random()*Math.PI*2 };
+            scene.add(b); bubbles.push(b);
         }
-        
-        // Starting platform
-        const startPlat = new THREE.Mesh(new THREE.BoxGeometry(20, 1, 20), rMat(0x333333));
-        startPlat.position.set(0, 4, 0); scene.add(startPlat); platforms.push(startPlat);
 
-        // Ladder
-        const ladderG = new THREE.Group();
-        for(let i=0; i<18; i+=0.5){
-            const s = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.1, 0.2), rMat(0x999999));
-            s.position.y = i; ladderG.add(s);
-        }
-        ladderG.position.set(40, 0, 34); scene.add(ladderG); ladders.push({x:40, z:34, h:18});
+        // DENSE PLATFORMS
+        const createPlat = (w,h,d,x,y,z, col=0x444444) => {
+            const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), rMat(col));
+            m.position.set(x,y,z); scene.add(m); platforms.push(m);
+        };
+        createPlat(20, 1, 20, 0, 4, 0, 0x333333); 
+        for(let i=0; i<45; i++) createPlat(Math.random()*10+6, 1, Math.random()*10+6, (Math.random()-0.5)*180, Math.random()*35+4, (Math.random()-0.5)*180, Math.random()*0xffffff);
 
-        // RPG Model
+        // LADDER
+        const createLadder = (x, z, h) => {
+            const g = new THREE.Group();
+            for(let i=0; i<h; i+=0.5){
+                const s = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.1, 0.2), rMat(0x999999));
+                s.position.y = i; g.add(s);
+            }
+            g.position.set(x, 0, z); scene.add(g); ladders.push({x, z, h});
+        };
+        createLadder(40, 34, 18.5);
+
+        // RPG MODEL
         function createRPG() {
             const g = new THREE.Group();
             const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.2), rMat(0x1a1a1a)); tube.rotation.x = Math.PI/2;
+            const wood = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.5), rMat(0x5d3a1a)); wood.rotation.x = Math.PI/2; wood.position.z = 0.15;
             const rG = new THREE.Group();
             const rT = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.35, 12), rMat(0x3e4a21)); rT.rotation.x = -Math.PI/2; rT.position.z = -0.85;
-            rG.add(rT); g.add(tube, rG); return { g, rocket: rG };
+            rG.add(rT); g.add(tube, wood, rG); return { g, rocket: rG };
         }
         const myRPG = createRPG(); myRPG.g.position.set(0.4,-0.4,-0.7); camera.add(myRPG.g);
 
-        // Audio and Logic
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        // --- GAMEPLAY LOGIC ---
         let isDead = false, isReloading = false, vel = new THREE.Vector3(), shake = 0;
-        let move = { f:0, b:0, l:0, r:0 };
+        let move = { f:0, b:0, l:0, r:0, sprint: false, crouch: false };
         let proj = [], explosions = [];
         const rocketRay = new THREE.Raycaster();
 
+        function doExplode(pos) {
+            playSynth.explosion();
+            const cluster = new THREE.Group(); cluster.position.copy(pos);
+            for(let i=0; i<12; i++) {
+                const s = new THREE.Mesh(new THREE.SphereGeometry(1.0, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true }));
+                s.position.set(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5); cluster.add(s);
+            }
+            scene.add(cluster); explosions.push({ m: cluster, t: 0 });
+            const d = camGroup.position.distanceTo(pos);
+            if(d < 15) {
+                shake = Math.max(shake, (15 - d) * 0.4);
+                const p = (15-d); const dir = new THREE.Vector3().subVectors(camGroup.position, pos).normalize();
+                vel.x += dir.x * p * 9; vel.z += dir.z * p * 9; vel.y += p * 3.2; 
+            }
+        }
+
         function fire() {
             if(isDead || !controls.isLocked || isReloading) return;
-            isReloading = true; myRPG.rocket.visible = false;
+            playSynth.fire(); isReloading = true; myRPG.rocket.visible = false;
             document.getElementById('reload-indicator').style.display='block';
             const r = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.4), rMat(0x4d5d2a));
-            const worldPos = new THREE.Vector3(); camera.getWorldPosition(worldPos);
-            r.position.copy(worldPos); r.quaternion.copy(camera.getWorldQuaternion(new THREE.Quaternion()));
+            r.position.copy(camera.getWorldPosition(new THREE.Vector3()));
+            r.quaternion.copy(camera.getWorldQuaternion(new THREE.Quaternion()));
             const dir = new THREE.Vector3(0,0,-1).applyQuaternion(r.quaternion);
             r.userData = { v: dir.multiplyScalar(1.6), life: 300 };
             scene.add(r); proj.push(r);
             setTimeout(() => { myRPG.rocket.visible=true; isReloading=false; document.getElementById('reload-indicator').style.display='none'; }, 2000);
         }
 
-        function doExplode(pos) {
-            const cluster = new THREE.Group(); cluster.position.copy(pos);
-            for(let i=0; i<8; i++) {
-                const s = new THREE.Mesh(new THREE.SphereGeometry(1, 4, 4), new THREE.MeshBasicMaterial({ color: 0xffaa00 }));
-                s.position.set(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5); cluster.add(s);
-            }
-            scene.add(cluster); explosions.push({ m: cluster, t: 0 });
-            const d = camGroup.position.distanceTo(pos);
-            if(d < 15) {
-                shake = (15-d)*0.4;
-                const p = (15-d); const dir = new THREE.Vector3().subVectors(camGroup.position, pos).normalize();
-                vel.x += dir.x * p * 9; vel.z += dir.z * p * 9; vel.y += p * 3.2; 
-            }
-        }
-
         const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
             const dt = Math.min(clock.getDelta(), 0.1);
+            const time = Date.now() * 0.005;
 
-            if (shake > 0) { camera.position.set((Math.random()-0.5)*shake, (Math.random()-0.5)*shake, 0); shake *= 0.9; }
+            bubbles.forEach(b => {
+                b.position.y += b.userData.speed;
+                if(b.position.y > -4.5) b.position.y = -6.0;
+            });
 
-            // Projectiles
+            if(shake > 0) { camera.position.set((Math.random()-0.5)*shake, (Math.random()-0.5)*shake, 0); shake *= 0.88; }
+            else camera.position.set(0,0,0);
+
             for(let i = proj.length - 1; i >= 0; i--) {
                 const p = proj[i]; const prev = p.position.clone();
                 p.position.add(p.userData.v);
                 rocketRay.set(prev, p.userData.v.clone().normalize());
                 rocketRay.far = p.userData.v.length();
                 const hits = rocketRay.intersectObjects(platforms);
-                if(hits.length > 0 || p.position.y < -5) {
+                if(hits.length > 0 || p.position.y < -5.0) {
                     doExplode(hits.length > 0 ? hits[0].point : p.position);
                     scene.remove(p); proj.splice(i, 1);
                 }
             }
 
-            explosions.forEach((ex, i) => {
-                ex.t += dt; ex.m.scale.multiplyScalar(1.05);
-                if(ex.t > 0.5) { scene.remove(ex.m); explosions.splice(i, 1); }
+            explosions.forEach((ex,i) => {
+                ex.t += dt; ex.m.scale.multiplyScalar(1.1);
+                if(ex.t > 0.6) { scene.remove(ex.m); explosions.splice(i,1); }
             });
 
             if(controls.isLocked && !isDead) {
                 vel.y -= 26 * dt;
-                const spd = 12 * dt;
+                const speedMult = (move.crouch ? 0.08 : (move.sprint ? 0.35 : 0.18)) * 60;
                 const forward = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion); forward.y = 0; forward.normalize();
                 const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
-                if(move.f) camGroup.position.addScaledVector(forward, spd);
-                if(move.b) camGroup.position.addScaledVector(forward, -spd);
-                if(move.l) camGroup.position.addScaledVector(right, -spd);
-                if(move.r) camGroup.position.addScaledVector(right, spd);
+                
+                if(move.f) camGroup.position.addScaledVector(forward, speedMult * dt);
+                if(move.b) camGroup.position.addScaledVector(forward, -speedMult * dt);
+                if(move.l) camGroup.position.addScaledVector(right, -speedMult * dt);
+                if(move.r) camGroup.position.addScaledVector(right, speedMult * dt);
+                
                 camGroup.position.y += vel.y * dt;
                 camGroup.position.x += vel.x * dt; camGroup.position.z += vel.z * dt;
-                vel.x *= 0.98; vel.z *= 0.98;
-
-                // Collisions
+                
                 platforms.forEach(p => {
                     const b = new THREE.Box3().setFromObject(p);
                     if(b.containsPoint(new THREE.Vector3(camGroup.position.x, camGroup.position.y-1.7, camGroup.position.z))) {
-                        if(vel.y < 0) { camGroup.position.y = p.position.y + 2.2; vel.y = 0; }
+                        if(vel.y < 0) { camGroup.position.y = p.position.y + (p.geometry.parameters.height/2) + 1.7; vel.y = 0; }
                     }
                 });
                 ladders.forEach(l => { if(new THREE.Vector2(camGroup.position.x, camGroup.position.z).distanceTo(new THREE.Vector2(l.x, l.z)) < 1.6 && move.f) vel.y = 8; });
+                
                 if(camGroup.position.y < -5) { isDead=true; document.getElementById('death-screen').style.display='flex'; setTimeout(()=>location.reload(), 1500); }
+                vel.x *= 0.95; vel.z *= 0.95;
 
-                // BROADCAST
-                connections.forEach(c => {
-                    if (c.open) c.send({ type: 'move', pos: camGroup.position, quat: camera.getWorldQuaternion(new THREE.Quaternion()) });
-                });
+                // Sync
+                connections.forEach(c => { if(c.open) c.send({type:'move', pos: camGroup.position, quat: camera.getWorldQuaternion(new THREE.Quaternion())}); });
+                document.getElementById('speed-lines').style.opacity = move.sprint ? "1" : "0";
             }
             effect.render(scene, camera);
         }
 
         window.onkeydown = (e) => {
             if(e.code==='KeyW') move.f=1; if(e.code==='KeyS') move.b=1; if(e.code==='KeyA') move.l=1; if(e.code==='KeyD') move.r=1;
-            if(e.code==='Space') { if(Math.abs(vel.y) < 0.1) vel.y = 12; }
+            if(e.code==='ShiftLeft') move.sprint=true; if(e.code==='KeyC') move.crouch=true;
+            if(e.code==='Space' && !move.crouch) { if(Math.abs(vel.y) < 0.1) vel.y = 12; }
         };
         window.onkeyup = (e) => {
             if(e.code==='KeyW') move.f=0; if(e.code==='KeyS') move.b=0; if(e.code==='KeyA') move.l=0; if(e.code==='KeyD') move.r=0;
+            if(e.code==='ShiftLeft') move.sprint=false; if(e.code==='KeyC') move.crouch=false;
         };
         document.addEventListener('mousedown', () => { if(!controls.isLocked) { audioCtx.resume(); controls.lock(); } else fire(); });
         animate();
