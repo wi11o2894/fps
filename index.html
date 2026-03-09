@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOON FPS: v8.0 REPULSION</title>
+    <title>TOON FPS: v8.1 BLAST TUNING</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
         canvas { display: block; width: 100vw; height: 100vh; }
@@ -22,7 +22,7 @@
     <div id="crosshair"></div>
     <div id="health-container"><div id="health-bar"></div></div>
     <div id="gui">
-        <div style="font-weight: bold;">TOON FPS v8.0</div>
+        <div style="font-weight: bold;">TOON FPS v8.1</div>
         <div id="my-id" style="font-size: 10px; color: #666;">ID: Connecting...</div>
         <div id="status" style="font-size: 10px; color: #2ed573;">Waiting for players...</div>
         <button id="copy-link">SHARE INVITE</button>
@@ -162,7 +162,7 @@
             return { group, torso, legL, legR, armL, armR, leftEye, rightEye };
         }
 
-        // --- REPULSION PHYSICS ---
+        // --- GAME PHYSICS ---
         let health = 100, isDead = false, isReloading = false, vel = new THREE.Vector3();
         let move = { f: false, b: false, l: false, r: false, sprint: false };
         let projectiles = [], explosions = [], particles = [], fragments = [];
@@ -176,21 +176,32 @@
             }
             scene.add(group); explosions.push({ mesh: group, time: 0 });
             
-            // LOCAL PLAYER REPULSION (ROCKET JUMP)
+            // LOCAL PLAYER BLAST (High Outward, Low Upward)
             const dist = camera.position.distanceTo(pos);
-            if(dist < 7) {
-                const push = new THREE.Vector3().subVectors(camera.position, pos).normalize();
-                const power = (7 - dist) * 12;
-                vel.add(push.multiplyScalar(power));
+            if(dist < 7.5) {
+                const pushDir = new THREE.Vector3().subVectors(camera.position, pos);
+                const horizontalPower = (7.5 - dist) * 18;
+                const verticalPower = (7.5 - dist) * 4; // Decreased upward
+                vel.x += pushDir.x * horizontalPower;
+                vel.z += pushDir.z * horizontalPower;
+                vel.y += verticalPower;
             }
             
-            // REMOTE PLAYER REPULSION
+            // REMOTE PLAYER BLAST
             Object.keys(players).forEach(id => {
-                const pDist = players[id].group.position.clone().add(new THREE.Vector3(0,1,0)).distanceTo(pos);
-                if(pDist < 7) {
-                    const pushDir = new THREE.Vector3().subVectors(players[id].group.position, pos).normalize();
-                    const pushPower = (7 - pDist) * 12;
-                    connections[id].send({ type: 'repel', x: pushDir.x * pushPower, y: pushDir.y * pushPower + 5, z: pushDir.z * pushPower, damage: 35 });
+                const pPos = players[id].group.position;
+                const pDist = pPos.distanceTo(pos);
+                if(pDist < 7.5) {
+                    const pPushDir = new THREE.Vector3().subVectors(pPos, pos).normalize();
+                    const hPower = (7.5 - pDist) * 18;
+                    const vPower = (7.5 - pDist) * 4;
+                    connections[id].send({ 
+                        type: 'repel', 
+                        x: pPushDir.x * hPower, 
+                        y: vPower + 2, 
+                        z: pPushDir.z * hPower, 
+                        damage: 35 
+                    });
                 }
             });
 
@@ -260,8 +271,7 @@
         function updateUI() { document.getElementById('health-bar').style.width = health + "%"; }
 
         window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
+            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
@@ -301,9 +311,10 @@
                 const dir = new THREE.Vector3(Number(move.r)-Number(move.l), 0, Number(move.f)-Number(move.b)).normalize();
                 
                 controls.moveRight(dir.x * speed); controls.moveForward(dir.z * speed);
+                camera.position.x += vel.x * delta;
+                camera.position.z += vel.z * delta;
                 camera.position.y += vel.y * delta;
                 
-                // CRATE PHYSICS
                 let onCrate = false;
                 crates.forEach(c => {
                     const dx = Math.abs(camera.position.x - c.position.x);
@@ -316,7 +327,7 @@
                 });
 
                 if(camera.position.y < 1.7 && !onCrate) { camera.position.y = 1.7; if(vel.y < 0) vel.y = 0; }
-                vel.x *= 0.95; vel.z *= 0.95; // Drag for repulsion
+                vel.x *= 0.92; vel.z *= 0.92; 
             }
 
             for(let id in players) {
