@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOON FPS: v8.1 BLAST TUNING</title>
+    <title>TOON FPS: v8.4 TOTAL</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
         canvas { display: block; width: 100vw; height: 100vh; }
@@ -12,7 +12,7 @@
         #health-container { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 300px; height: 25px; border: 4px solid black; background: #333; z-index: 10; }
         #health-bar { width: 100%; height: 100%; background: #2ed573; transition: width 0.2s; }
         #death-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; color: white; }
-        #speed-lines { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; opacity: 0; background: radial-gradient(circle, transparent 25%, rgba(255,255,255,0.6) 100%); mask-image: repeating-conic-gradient(from 0deg, black 0deg 2deg, transparent 2deg 15deg); -webkit-mask-image: repeating-conic-gradient(from 0deg, black 0deg 2deg, transparent 2deg 15deg); transition: opacity 0.15s; }
+        #speed-lines { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; opacity: 0; background: radial-gradient(circle, transparent 25%, rgba(255,255,255,0.7) 100%); mask-image: repeating-conic-gradient(from 0deg, black 0deg 2deg, transparent 2deg 15deg); -webkit-mask-image: repeating-conic-gradient(from 0deg, black 0deg 2deg, transparent 2deg 15deg); transition: opacity 0.1s; }
         button { background: #ff4757; color: white; border: 2px solid black; padding: 5px; cursor: pointer; width: 100%; margin-top: 10px; font-weight: bold; }
     </style>
 </head>
@@ -22,7 +22,7 @@
     <div id="crosshair"></div>
     <div id="health-container"><div id="health-bar"></div></div>
     <div id="gui">
-        <div style="font-weight: bold;">TOON FPS v8.1</div>
+        <div style="font-weight: bold;">TOON FPS v8.4</div>
         <div id="my-id" style="font-size: 10px; color: #666;">ID: Connecting...</div>
         <div id="status" style="font-size: 10px; color: #2ed573;">Waiting for players...</div>
         <button id="copy-link">SHARE INVITE</button>
@@ -67,66 +67,31 @@
             scene.add(blade);
         }
 
-        // --- PLANK CRATE MODEL ---
+        // --- PLANK CRATES ---
         const crates = [];
         function createPlankCrate(x, z) {
             const group = new THREE.Group();
-            const woodColor = 0x8B4513;
-            const darkWood = 0x5D2906;
+            const woodColor = 0x8B4513; const darkWood = 0x5D2906;
             const createFace = (rotX, rotY, pos) => {
                 const face = new THREE.Group();
                 for(let i=0; i<3; i++) {
                     const plank = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.38, 0.05), toonMat(woodColor));
-                    plank.position.y = (i-1) * 0.4;
-                    face.add(plank);
+                    plank.position.y = (i-1) * 0.4; face.add(plank);
                 }
                 const frame = new THREE.Mesh(new THREE.BoxGeometry(1.25, 1.25, 0.02), toonMat(darkWood));
-                frame.position.z = -0.02;
-                face.add(frame);
-                face.rotation.set(rotX, rotY, 0);
-                face.position.copy(pos);
-                return face;
+                frame.position.z = -0.02; face.add(frame);
+                face.rotation.set(rotX, rotY, 0); face.position.copy(pos); return face;
             };
-            group.add(createFace(0, 0, new THREE.Vector3(0, 0, 0.6)));
-            group.add(createFace(0, Math.PI, new THREE.Vector3(0, 0, -0.6)));
-            group.add(createFace(0, Math.PI/2, new THREE.Vector3(0.6, 0, 0)));
-            group.add(createFace(0, -Math.PI/2, new THREE.Vector3(-0.6, 0, 0)));
-            group.add(createFace(Math.PI/2, 0, new THREE.Vector3(0, 0.6, 0)));
-            group.add(createFace(-Math.PI/2, 0, new THREE.Vector3(0, -0.6, 0)));
-            group.position.set(x, 0.6, z);
-            scene.add(group);
-            crates.push(group);
+            group.add(createFace(0,0,new THREE.Vector3(0,0,0.6)), createFace(0,Math.PI,new THREE.Vector3(0,0,-0.6)), createFace(0,Math.PI/2,new THREE.Vector3(0.6,0,0)), createFace(0,-Math.PI/2,new THREE.Vector3(-0.6,0,0)), createFace(Math.PI/2,0,new THREE.Vector3(0,0.6,0)), createFace(-Math.PI/2,0,new THREE.Vector3(0,-0.6,0)));
+            group.position.set(x, 0.6, z); scene.add(group); crates.push(group);
         }
         for(let i=0; i<15; i++) createPlankCrate(Math.random()*40-20, Math.random()*40-20);
 
         scene.add(new THREE.AmbientLight(0xffffff, 1.2));
         const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-        sun.position.set(10, 20, 10);
-        scene.add(sun);
+        sun.position.set(10, 20, 10); scene.add(sun);
 
-        // --- MODELS ---
-        function createRPGModel() {
-            const group = new THREE.Group();
-            const mainTube = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0), toonMat(0x222222));
-            mainTube.rotation.x = Math.PI/2;
-            const woodGrip = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.4), toonMat(0x8B4513));
-            woodGrip.rotation.x = Math.PI/2; woodGrip.position.z = 0.1;
-            const handle1 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.15, 0.06), toonMat(0x552211));
-            handle1.position.set(0, -0.12, -0.1);
-            const rocketGroup = new THREE.Group();
-            const rTip = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 12), toonMat(0x4b5320));
-            rTip.rotation.x = -Math.PI/2; rTip.position.z = -0.7;
-            const rBody = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.4), toonMat(0x6b8e23));
-            rBody.rotation.x = Math.PI/2; rBody.position.z = -0.5;
-            rocketGroup.add(rTip, rBody);
-            group.add(mainTube, woodGrip, handle1, rocketGroup);
-            return { group, rocket: rocketGroup };
-        }
-        const myRPG = createRPGModel();
-        myRPG.group.position.set(0.4, -0.4, -0.6);
-        camera.add(myRPG.group);
-        scene.add(camera);
-
+        // --- PLAYER MODELS (LOCAL & REMOTE) ---
         function createPlayerModel(color) {
             const group = new THREE.Group();
             const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.25, 0.5, 4, 8), toonMat(color));
@@ -147,11 +112,9 @@
                 const root = new THREE.Group();
                 const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.25, 4, 8), toonMat(isLeg ? 0x222222 : color));
                 upper.position.y = -0.125;
-                const lowerGroup = new THREE.Group();
-                lowerGroup.position.y = -0.25;
+                const lowerGroup = new THREE.Group(); lowerGroup.position.y = -0.25;
                 const lower = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.25, 4, 8), toonMat(isLeg ? 0x222222 : color));
-                lower.position.y = -0.125;
-                lowerGroup.add(lower); root.add(upper, lowerGroup);
+                lower.position.y = -0.125; lowerGroup.add(lower); root.add(upper, lowerGroup);
                 return { root, lower: lowerGroup };
             };
             const legL = createLimb(true); legL.root.position.set(-0.15, 0.8, 0);
@@ -162,46 +125,53 @@
             return { group, torso, legL, legR, armL, armR, leftEye, rightEye };
         }
 
-        // --- GAME PHYSICS ---
+        function createRPGModel() {
+            const group = new THREE.Group();
+            const mainTube = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0), toonMat(0x222222));
+            mainTube.rotation.x = Math.PI/2;
+            const woodGrip = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.4), toonMat(0x8B4513));
+            woodGrip.rotation.x = Math.PI/2; woodGrip.position.z = 0.1;
+            const handle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.15, 0.06), toonMat(0x552211));
+            handle.position.set(0, -0.12, -0.1);
+            const rocketGroup = new THREE.Group();
+            const rTip = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 12), toonMat(0x4b5320));
+            rTip.rotation.x = -Math.PI/2; rTip.position.z = -0.7;
+            const rBody = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.4), toonMat(0x6b8e23));
+            rBody.rotation.x = Math.PI/2; rBody.position.z = -0.5;
+            rocketGroup.add(rTip, rBody); group.add(mainTube, woodGrip, handle, rocketGroup);
+            return { group, rocket: rocketGroup };
+        }
+
+        const myRPG = createRPGModel(); myRPG.group.position.set(0.4, -0.4, -0.6); camera.add(myRPG.group); scene.add(camera);
+
+        // --- STATE & PHYSICS ---
         let health = 100, isDead = false, isReloading = false, vel = new THREE.Vector3();
-        let move = { f: false, b: false, l: false, r: false, sprint: false };
+        let move = { f: false, b: false, l: false, r: false, sprint: false, crouch: false };
         let projectiles = [], explosions = [], particles = [], fragments = [];
+        let baseH = 1.7, crouchH = 1.0, targetH = 1.7;
 
         function createExplosion(pos) {
             const group = new THREE.Group(); group.position.copy(pos);
             for(let i=0; i<8; i++){
                 const b = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), toonMat(i % 2 === 0 ? 0xffa502 : 0xffffff));
-                b.position.set(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5);
-                group.add(b);
+                b.position.set(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5); group.add(b);
             }
             scene.add(group); explosions.push({ mesh: group, time: 0 });
             
-            // LOCAL PLAYER BLAST (High Outward, Low Upward)
             const dist = camera.position.distanceTo(pos);
             if(dist < 7.5) {
-                const pushDir = new THREE.Vector3().subVectors(camera.position, pos);
-                const horizontalPower = (7.5 - dist) * 18;
-                const verticalPower = (7.5 - dist) * 4; // Decreased upward
-                vel.x += pushDir.x * horizontalPower;
-                vel.z += pushDir.z * horizontalPower;
-                vel.y += verticalPower;
+                const pushDir = new THREE.Vector3().subVectors(camera.position, pos).normalize();
+                const power = (7.5 - dist);
+                vel.x += pushDir.x * power * 8; // Reduced outward
+                vel.z += pushDir.z * power * 8; // Reduced outward
+                vel.y += power * 4; // Maintained upward
             }
             
-            // REMOTE PLAYER BLAST
             Object.keys(players).forEach(id => {
-                const pPos = players[id].group.position;
-                const pDist = pPos.distanceTo(pos);
+                const pDist = players[id].group.position.distanceTo(pos);
                 if(pDist < 7.5) {
-                    const pPushDir = new THREE.Vector3().subVectors(pPos, pos).normalize();
-                    const hPower = (7.5 - pDist) * 18;
-                    const vPower = (7.5 - pDist) * 4;
-                    connections[id].send({ 
-                        type: 'repel', 
-                        x: pPushDir.x * hPower, 
-                        y: vPower + 2, 
-                        z: pPushDir.z * hPower, 
-                        damage: 35 
-                    });
+                    const pDir = new THREE.Vector3().subVectors(players[id].group.position, pos).normalize();
+                    connections[id].send({ type: 'repel', x: pDir.x*8, y: 5, z: pDir.z*8, damage: 35 });
                 }
             });
 
@@ -215,7 +185,7 @@
             for(let i=0; i<8; i++) {
                 const frag = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.2, 0.1), toonMat(0x8B4513));
                 frag.position.copy(pos).add(new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5));
-                frag.userData = { vel: new THREE.Vector3(Math.random()-0.5, 0.5+Math.random(), Math.random()-0.5).multiplyScalar(5), life: 2.5 };
+                frag.userData = { vel: new THREE.Vector3(Math.random()-0.5, 1+Math.random(), Math.random()-0.5).multiplyScalar(5), life: 2.5 };
                 scene.add(frag); fragments.push(frag);
             }
         }
@@ -238,42 +208,22 @@
 
         // --- NETWORKING ---
         const peer = new Peer(); const players = {}, connections = {};
-        peer.on('open', id => { 
-            document.getElementById('my-id').innerText = "ID: " + id;
-            const joinId = new URLSearchParams(window.location.search).get('join');
-            if(joinId) setupConn(peer.connect(joinId));
-        });
+        peer.on('open', id => { document.getElementById('my-id').innerText = "ID: " + id; const joinId = new URLSearchParams(window.location.search).get('join'); if(joinId) setupConn(peer.connect(joinId)); });
         peer.on('connection', setupConn);
         function setupConn(c) {
             c.on('open', () => { connections[c.peer] = c; });
             c.on('data', d => {
-                if(d.type === 'repel') { 
-                    vel.add(new THREE.Vector3(d.x, d.y, d.z));
-                    health -= d.damage; if(health<=0 && !isDead) die(); updateUI(); 
-                }
+                if(d.type === 'repel') { vel.add(new THREE.Vector3(d.x, d.y, d.z)); health -= d.damage; if(health<=0 && !isDead) die(); updateUI(); }
                 else {
-                    if(!players[c.peer]) {
-                        players[c.peer] = { ...createPlayerModel(Math.random()*0xffffff), target: new THREE.Vector3(), tRot: 0, anim: 0 };
-                        scene.add(players[c.peer].group);
-                    }
-                    players[c.peer].target.set(d.x, d.y - 1.7, d.z); players[c.peer].tRot = d.ry;
-                    players[c.peer].moving = d.moving; players[c.peer].inAir = d.inAir;
+                    if(!players[c.peer]) { players[c.peer] = { ...createPlayerModel(Math.random()*0xffffff), target: new THREE.Vector3(), tRot: 0, anim: 0 }; scene.add(players[c.peer].group); }
+                    players[c.peer].target.set(d.x, d.y - 1.7, d.z); players[c.peer].tRot = d.ry; players[c.peer].moving = d.moving; players[c.peer].inAir = d.inAir;
                 }
             });
         }
-
-        document.getElementById('copy-link').onclick = () => {
-            const link = `${window.location.origin}${window.location.pathname}?join=${peer.id}`;
-            navigator.clipboard.writeText(link); alert("Invite Copied!");
-        };
+        document.getElementById('copy-link').onclick = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?join=${peer.id}`); alert("Invite Copied!"); };
 
         function die() { isDead = true; document.getElementById('death-screen').style.display = 'flex'; controls.unlock(); setTimeout(() => { isDead = false; health = 100; updateUI(); document.getElementById('death-screen').style.display = 'none'; camera.position.set(0, 1.7, 0); controls.lock(); }, 3000); }
         function updateUI() { document.getElementById('health-bar').style.width = health + "%"; }
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
 
         // --- LOOP ---
         const clock = new THREE.Clock();
@@ -288,79 +238,54 @@
                 if(p.position.y < 0.1 || p.userData.life <= 0) { createExplosion(p.position); scene.remove(p); projectiles.splice(i,1); }
             });
 
-            particles.forEach((p, i) => {
-                p.life -= delta * 1.5; p.mesh.scale.multiplyScalar(1.05); p.mesh.material.opacity = p.life;
-                if(p.life <= 0) { scene.remove(p.mesh); particles.splice(i, 1); }
-            });
-
-            fragments.forEach((f, i) => {
-                f.userData.vel.y -= 15 * delta; f.position.add(f.userData.vel.clone().multiplyScalar(delta));
-                f.userData.life -= delta; if(f.position.y < 0.1) { f.position.y = 0.1; f.userData.vel.set(0,0,0); }
-                if(f.userData.life <= 0) { scene.remove(f); fragments.splice(i, 1); }
-            });
-
-            explosions.forEach((ex, i) => {
-                ex.time += delta; ex.mesh.scale.multiplyScalar(1.1);
-                if(ex.time > 0.4) { scene.remove(ex.mesh); explosions.splice(i, 1); }
-            });
+            particles.forEach((p, i) => { p.life -= delta * 1.5; p.mesh.scale.multiplyScalar(1.05); p.mesh.material.opacity = p.life; if(p.life <= 0) { scene.remove(p.mesh); particles.splice(i, 1); } });
+            fragments.forEach((f, i) => { f.userData.vel.y -= 15 * delta; f.position.add(f.userData.vel.clone().multiplyScalar(delta)); if(f.position.y < 0.1) { f.position.y = 0.1; f.userData.vel.set(0,0,0); } f.userData.life -= delta; if(f.userData.life <= 0) { scene.remove(f); fragments.splice(i, 1); } });
+            explosions.forEach((ex, i) => { ex.time += delta; ex.mesh.scale.multiplyScalar(1.1); if(ex.time > 0.4) { scene.remove(ex.mesh); explosions.splice(i, 1); } });
 
             if (controls.isLocked && !isDead) {
                 vel.y -= 25 * delta;
-                const speed = move.sprint ? 0.3 : 0.15;
+                const speed = move.crouch ? 0.08 : (move.sprint ? 0.3 : 0.15);
+                targetH = move.crouch ? crouchH : baseH;
+                
+                const isMoving = move.f || move.b || move.l || move.r;
+                document.getElementById('speed-lines').style.opacity = (move.sprint && isMoving && !move.crouch) ? "1" : "0";
+
                 const oldPos = camera.position.clone();
                 const dir = new THREE.Vector3(Number(move.r)-Number(move.l), 0, Number(move.f)-Number(move.b)).normalize();
-                
                 controls.moveRight(dir.x * speed); controls.moveForward(dir.z * speed);
-                camera.position.x += vel.x * delta;
-                camera.position.z += vel.z * delta;
-                camera.position.y += vel.y * delta;
+                camera.position.x += vel.x * delta; camera.position.z += vel.z * delta; camera.position.y += vel.y * delta;
                 
                 let onCrate = false;
                 crates.forEach(c => {
-                    const dx = Math.abs(camera.position.x - c.position.x);
-                    const dz = Math.abs(camera.position.z - c.position.z);
-                    const dy = camera.position.y - c.position.y;
+                    const dx = Math.abs(camera.position.x - c.position.x), dz = Math.abs(camera.position.z - c.position.z), dy = camera.position.y - c.position.y;
                     if(dx < 0.9 && dz < 0.9) {
-                        if(dy > 0.5 && dy < 1.5) { camera.position.y = c.position.y + 1.2; vel.y = 0; onCrate = true; }
-                        else if (dy < 0.5) { camera.position.x = oldPos.x; camera.position.z = oldPos.z; }
+                        if(dy > 0.3 && dy < 1.5) { camera.position.y = c.position.y + 0.6 + targetH; vel.y = 0; onCrate = true; }
+                        else if (dy < 0.3) { camera.position.x = oldPos.x; camera.position.z = oldPos.z; }
                     }
                 });
 
-                if(camera.position.y < 1.7 && !onCrate) { camera.position.y = 1.7; if(vel.y < 0) vel.y = 0; }
+                if(camera.position.y < targetH && !onCrate) { camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetH, 0.2); if(vel.y < 0) vel.y = 0; }
                 vel.x *= 0.92; vel.z *= 0.92; 
             }
 
             for(let id in players) {
-                const p = players[id];
-                p.group.position.lerp(p.target, 0.2); p.group.rotation.y = p.tRot + Math.PI;
-                const eyeShake = Math.sin(Date.now() * 0.01) * 0.02;
-                p.leftEye.pupil.position.x = eyeShake; p.rightEye.pupil.position.x = -eyeShake;
-                if(p.inAir) {
-                    p.anim += delta * 15;
-                    p.legL.root.rotation.z = Math.sin(p.anim) * 0.5; p.legR.root.rotation.z = Math.cos(p.anim) * 0.5;
-                } else if(p.moving) {
-                    p.anim += delta * 12;
-                    const swing = Math.sin(p.anim) * 0.8;
-                    p.legL.root.rotation.x = swing; p.legL.lower.rotation.x = Math.max(0, Math.cos(p.anim)) * 0.9;
-                    p.legR.root.rotation.x = -swing; p.legR.lower.rotation.x = Math.max(0, Math.cos(p.anim + Math.PI)) * 0.9;
-                } else { p.legL.root.rotation.x = p.legR.root.rotation.x = p.legL.lower.rotation.x = 0; }
+                const p = players[id]; p.group.position.lerp(p.target, 0.2); p.group.rotation.y = p.tRot + Math.PI;
+                const eyeS = Math.sin(Date.now() * 0.01) * 0.02; p.leftEye.pupil.position.x = eyeS; p.rightEye.pupil.position.x = -eyeS;
+                if(p.inAir) { p.anim += delta * 15; p.legL.root.rotation.z = Math.sin(p.anim) * 0.5; p.legR.root.rotation.z = Math.cos(p.anim) * 0.5; }
+                else if(p.moving) { p.anim += delta * 12; const swing = Math.sin(p.anim) * 0.8; p.legL.root.rotation.x = swing; p.legR.root.rotation.x = -swing; }
+                else { p.legL.root.rotation.x = p.legR.root.rotation.x = 0; }
             }
             effect.render(scene, camera);
         }
 
-        setInterval(() => {
-            if(peer.id) Object.values(connections).forEach(c => {
-                if(c.open) c.send({ x: camera.position.x, y: camera.position.y, z: camera.position.z, ry: camera.rotation.y, moving: (move.f||move.b||move.l||move.r), inAir: camera.position.y > 1.8 });
-            });
-        }, 16);
+        setInterval(() => { if(peer.id) Object.values(connections).forEach(c => { if(c.open) c.send({ x: camera.position.x, y: camera.position.y, z: camera.position.z, ry: camera.rotation.y, moving: (move.f||move.b||move.l||move.r), inAir: camera.position.y > 1.8 }); }); }, 16);
 
         window.onkeydown = (e) => { 
-            if(e.code==='KeyW') move.f=true; if(e.code==='KeyS') move.b=true; 
-            if(e.code==='KeyA') move.l=true; if(e.code==='KeyD') move.r=true; 
-            if(e.code==='ShiftLeft') move.sprint=true; 
-            if(e.code==='Space' && camera.position.y <= 1.72) vel.y = 10; 
+            if(e.code==='KeyW') move.f=true; if(e.code==='KeyS') move.b=true; if(e.code==='KeyA') move.l=true; if(e.code==='KeyD') move.r=true; 
+            if(e.code==='ShiftLeft') move.sprint=true; if(e.code==='KeyC') move.crouch=true;
+            if(e.code==='Space' && !move.crouch) vel.y = 10; 
         };
-        window.onkeyup = (e) => { if(e.code==='KeyW') move.f=false; if(e.code==='KeyS') move.b=false; if(e.code==='KeyA') move.l=false; if(e.code==='KeyD') move.r=false; if(e.code==='ShiftLeft') move.sprint=false; };
+        window.onkeyup = (e) => { if(e.code==='KeyW') move.f=false; if(e.code==='KeyS') move.b=false; if(e.code==='KeyA') move.l=false; if(e.code==='KeyD') move.r=false; if(e.code==='ShiftLeft') move.sprint=false; if(e.code==='KeyC') move.crouch=false; };
         document.addEventListener('mousedown', () => { if(!controls.isLocked) controls.lock(); else fire(); });
         animate();
     </script>
