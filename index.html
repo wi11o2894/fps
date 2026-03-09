@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOON FPS: v6.3 FIXED</title>
+    <title>TOON FPS: v6.4 RPG VIEW MODEL</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
         canvas { display: block; }
@@ -22,7 +22,7 @@
     <div id="crosshair"></div>
     <div id="health-container"><div id="health-bar"></div></div>
     <div id="gui">
-        <div style="font-weight: bold;">TOON FPS v6.3</div>
+        <div style="font-weight: bold;">TOON FPS v6.4</div>
         <div id="my-id" style="font-size: 10px; color: #666;">ID: Connecting...</div>
         <div id="status" style="font-size: 10px; color: #2ed573;">Waiting for players...</div>
         <button id="copy-link">SHARE INVITE</button>
@@ -45,7 +45,6 @@
         import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
         import { Peer } from 'peerjs';
 
-        // --- SCENE SETUP ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87CEEB);
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -62,30 +61,37 @@
         const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), toonMat(0x2ed573));
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
-
-        const grassGeo = new THREE.PlaneGeometry(0.1, 0.4);
         for (let i = 0; i < 1000; i++) {
-            const blade = new THREE.Mesh(grassGeo, toonMat(0x26af5b));
+            const blade = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.4), toonMat(0x26af5b));
             blade.position.set(Math.random()*60-30, 0.2, Math.random()*60-30);
             blade.rotation.y = Math.random()*Math.PI;
             scene.add(blade);
         }
-
         scene.add(new THREE.AmbientLight(0xffffff, 1.2));
         const sun = new THREE.DirectionalLight(0xffffff, 0.8);
         sun.position.set(10, 20, 10);
         scene.add(sun);
 
-        // Player View (Hand/Flash)
-        const hand = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), toonMat(0xffdbac));
-        hand.position.set(0.4, -0.4, -0.6);
-        camera.add(hand);
+        // --- RPG VIEW MODEL ---
+        const rpgGroup = new THREE.Group();
+        const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.8, 8), toonMat(0x444444));
+        tube.rotation.x = Math.PI / 2;
+        
+        // The Rocket inside the gun
+        const loadedRocket = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.3), toonMat(0xff4757));
+        loadedRocket.position.z = -0.3;
+        loadedRocket.rotation.x = Math.PI / 2;
+
+        rpgGroup.add(tube, loadedRocket);
+        rpgGroup.position.set(0.4, -0.4, -0.6);
+        camera.add(rpgGroup);
+
         const flash = new THREE.PointLight(0xFFD700, 0, 5);
         camera.add(flash);
         scene.add(camera);
 
-        // --- GAME STATE ---
-        let health = 100, isDead = false, vel = new THREE.Vector3(), bobTimer = 0, currentEyeHeight = 1.6;
+        // --- STATE ---
+        let health = 100, isDead = false, isReloading = false, vel = new THREE.Vector3(), bobTimer = 0, currentEyeHeight = 1.6;
         let move = { f: false, b: false, l: false, r: false, sprint: false, crouch: false };
         let projectiles = [], explosions = [];
         const speedLinesEl = document.getElementById('speed-lines');
@@ -99,11 +105,17 @@
             return group;
         }
 
-        // --- COMBAT & RPG ---
         function fireRPG() {
-            if(isDead || !controls.isLocked) return;
-            flash.intensity = 15; hand.position.z += 0.1;
-            setTimeout(() => { flash.intensity = 0; hand.position.z -= 0.1; }, 50);
+            if(isDead || !controls.isLocked || isReloading) return;
+            isReloading = true;
+            
+            // Rocket goes away from gun
+            loadedRocket.visible = false;
+            flash.intensity = 15;
+            
+            // Kickback
+            rpgGroup.position.z += 0.2;
+            rpgGroup.rotation.x -= 0.2;
 
             const rocket = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.4), toonMat(0xff4757));
             rocket.position.copy(camera.position);
@@ -114,6 +126,31 @@
             projectiles.push(rocket);
             
             Object.values(connections).forEach(c => { if(c.open) c.send({ type: 'rpc_fire', x: rocket.position.x, y: rocket.position.y, z: rocket.position.z }); });
+
+            // Reload Animation sequence
+            setTimeout(() => { flash.intensity = 0; }, 50);
+            
+            // Dip gun down, then bring it back up with a new rocket
+            setTimeout(() => {
+                const reloadTween = setInterval(() => {
+                    rpgGroup.position.y -= 0.05;
+                    if(rpgGroup.position.y < -1) {
+                        clearInterval(reloadTween);
+                        loadedRocket.visible = true; // Rocket back in tube
+                        rpgGroup.position.z = -0.6;
+                        rpgGroup.rotation.x = 0;
+                        
+                        const bringUp = setInterval(() => {
+                            rpgGroup.position.y += 0.05;
+                            if(rpgGroup.position.y >= -0.4) {
+                                rpgGroup.position.y = -0.4;
+                                clearInterval(bringUp);
+                                isReloading = false;
+                            }
+                        }, 16);
+                    }
+                }, 16);
+            }, 400);
         }
 
         function createExplosion(pos) {
@@ -126,35 +163,26 @@
             }
             scene.add(group);
             explosions.push({ mesh: group, time: 0 });
-
             if(camera.position.distanceTo(pos) < 5) vel.y += (5 - camera.position.distanceTo(pos)) * 12;
             Object.keys(players).forEach(id => {
                 if(players[id].mesh.position.distanceTo(pos) < 5) connections[id].send({ type: 'hit', damage: 35 });
             });
         }
 
-        // --- MULTIPLAYER CORE ---
+        // --- NETWORKING ---
         const peer = new Peer();
         const players = {};
         const connections = {};
-
         peer.on('open', id => {
             document.getElementById('my-id').innerText = "ID: " + id;
             const urlJoin = new URLSearchParams(window.location.search).get('join');
             if(urlJoin) setupConn(peer.connect(urlJoin));
         });
-
         peer.on('connection', setupConn);
-
         function setupConn(c) {
-            c.on('open', () => {
-                connections[c.peer] = c;
-                document.getElementById('status').innerText = `Connected: ${Object.keys(connections).length} player(s)`;
-            });
-
+            c.on('open', () => { connections[c.peer] = c; document.getElementById('status').innerText = `Connected: ${Object.keys(connections).length} player(s)`; });
             c.on('data', d => {
                 if(d.type === 'hit') { health -= d.damage; if(health<=0 && !isDead) die(); updateUI(); }
-                else if(d.type === 'rpc_fire') { /* Potential for remote projectile visual */ }
                 else {
                     if(!players[c.peer]) {
                         const model = createPlayerModel(Math.random()*0xffffff);
@@ -166,39 +194,17 @@
                 }
             });
         }
-
-        setInterval(() => {
-            Object.values(connections).forEach(c => {
-                if(c.open) c.send({ x: camera.position.x, y: camera.position.y, z: camera.position.z, ry: camera.rotation.y });
-            });
-        }, 16);
-
-        document.getElementById('copy-link').onclick = () => {
-            const link = `${window.location.origin}${window.location.pathname}?join=${peer.id}`;
-            navigator.clipboard.writeText(link); alert("Invite Copied!");
-        };
+        setInterval(() => { Object.values(connections).forEach(c => { if(c.open) c.send({ x: camera.position.x, y: camera.position.y, z: camera.position.z, ry: camera.rotation.y }); }); }, 16);
+        document.getElementById('copy-link').onclick = () => { const link = `${window.location.origin}${window.location.pathname}?join=${peer.id}`; navigator.clipboard.writeText(link); alert("Invite Copied!"); };
 
         // --- HELPERS ---
-        function die() {
-            isDead = true; health = 0; updateUI();
-            document.getElementById('death-screen').style.display = 'flex';
-            controls.unlock();
-            let count = 3;
-            const t = setInterval(() => {
-                count--; document.getElementById('timer').innerText = count;
-                if(count<=0) { clearInterval(t); respawn(); }
-            }, 1000);
-        }
-        function respawn() {
-            isDead = false; health = 100; updateUI();
-            document.getElementById('death-screen').style.display = 'none';
-            camera.position.set(0, 1.6, 0); controls.lock();
-        }
+        function die() { isDead = true; health = 0; updateUI(); document.getElementById('death-screen').style.display = 'flex'; controls.unlock(); let count = 3; const t = setInterval(() => { count--; document.getElementById('timer').innerText = count; if(count<=0) { clearInterval(t); respawn(); } }, 1000); }
+        function respawn() { isDead = false; health = 100; updateUI(); document.getElementById('death-screen').style.display = 'none'; camera.position.set(0, 1.6, 0); controls.lock(); }
         function updateUI() { document.getElementById('health-bar').style.width = health + "%"; }
 
         // --- INPUT & LOOP ---
         window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
-        document.addEventListener('click', () => { if(!controls.isLocked) controls.lock(); else fireRPG(); });
+        document.addEventListener('mousedown', () => { if(!controls.isLocked) controls.lock(); else fireRPG(); });
         document.onkeydown = (e) => {
             if(isDead) return;
             if (['KeyW','KeyS','KeyA','KeyD','KeyC','Space','ShiftLeft'].includes(e.code)) e.preventDefault();
@@ -207,11 +213,7 @@
             if(e.code==='ShiftLeft') move.sprint=true; if(e.code==='KeyC') move.crouch=true;
             if(e.code==='Space' && Math.abs(vel.y)<0.1 && !move.crouch) vel.y += 10;
         };
-        document.onkeyup = (e) => {
-            if(e.code==='KeyW') move.f=false; if(e.code==='KeyS') move.b=false;
-            if(e.code==='KeyA') move.l=false; if(e.code==='KeyD') move.r=false;
-            if(e.code==='ShiftLeft') move.sprint=false; if(e.code==='KeyC') move.crouch=false;
-        };
+        document.onkeyup = (e) => { if(e.code==='KeyW') move.f=false; if(e.code==='KeyS') move.b=false; if(e.code==='KeyA') move.l=false; if(e.code==='KeyD') move.r=false; if(e.code==='ShiftLeft') move.sprint=false; if(e.code==='KeyC') move.crouch=false; };
 
         const clock = new THREE.Clock();
         function animate() {
@@ -224,24 +226,18 @@
                 if(p.position.y < 0.1 || p.userData.life <= 0) { createExplosion(p.position); scene.remove(p); projectiles.splice(i, 1); }
             });
 
-            explosions.forEach((ex, i) => {
-                ex.time += delta; ex.mesh.scale.multiplyScalar(1.08);
-                if(ex.time > 0.4) { scene.remove(ex.mesh); explosions.splice(i, 1); }
-            });
+            explosions.forEach((ex, i) => { ex.time += delta; ex.mesh.scale.multiplyScalar(1.08); if(ex.time > 0.4) { scene.remove(ex.mesh); explosions.splice(i, 1); } });
 
             if (controls.isLocked && !isDead) {
                 vel.y -= 30 * delta; 
                 let speed = move.crouch ? 50 : (move.sprint ? 200 : 110);
                 const isMoving = move.f || move.b || move.l || move.r;
-
                 camera.fov = THREE.MathUtils.lerp(camera.fov, (move.sprint && isMoving ? 90 : 75), 8*delta);
                 camera.updateProjectionMatrix();
                 speedLinesEl.style.opacity = (move.sprint && isMoving ? "1" : "0");
-
                 const dir = new THREE.Vector3(Number(move.r)-Number(move.l), 0, Number(move.f)-Number(move.b)).normalize();
                 controls.moveRight(dir.x * speed * delta * 0.1);
                 controls.moveForward(dir.z * speed * delta * 0.1);
-
                 currentEyeHeight = THREE.MathUtils.lerp(currentEyeHeight, (move.crouch ? 0.8 : 1.6), 10 * delta);
                 camera.position.y += vel.y * delta;
                 if (camera.position.y <= currentEyeHeight) {
