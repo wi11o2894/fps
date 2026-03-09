@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOON FPS: v7.4 RPG-7 & WOBBLY PHYSICS</title>
+    <title>TOON FPS: v7.5 FULL FEATURES</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
         canvas { display: block; }
@@ -17,12 +17,12 @@
     </style>
 </head>
 <body>
-    <div id="death-screen"><h1>WASTED</h1><p>RESPAWNING IN <span id="timer">3</span>...</p></div>
+    <div id="death-screen"><h1>DEFEATED</h1><p>RESPAWNING IN <span id="timer">3</span>...</p></div>
     <div id="speed-lines"></div>
     <div id="crosshair"></div>
     <div id="health-container"><div id="health-bar"></div></div>
     <div id="gui">
-        <div style="font-weight: bold;">TOON FPS v7.4</div>
+        <div style="font-weight: bold;">TOON FPS v7.5</div>
         <div id="my-id" style="font-size: 10px; color: #666;">ID: Connecting...</div>
         <div id="status" style="font-size: 10px; color: #2ed573;">Waiting for players...</div>
         <button id="copy-link">SHARE INVITE</button>
@@ -55,38 +55,37 @@
         const controls = new PointerLockControls(camera, document.body);
         const toonMat = (color) => new THREE.MeshToonMaterial({ color });
 
-        // World Items
-        const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), toonMat(0x2ed573));
+        // --- RESTORED GRASS ---
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), toonMat(0x2ed573));
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
+        for (let i = 0; i < 400; i++) {
+            const blade = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.4), toonMat(0x26af5b));
+            blade.position.set(Math.random()*80-40, 0.2, Math.random()*80-40);
+            blade.rotation.y = Math.random()*Math.PI;
+            scene.add(blade);
+        }
         scene.add(new THREE.AmbientLight(0xffffff, 1.2));
         const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-        sun.position.set(20, 40, 20);
+        sun.position.set(10, 20, 10);
         scene.add(sun);
 
-        // --- RPG-7 MODEL (BASED ON IMAGE) ---
+        // --- RPG-7 MODEL ---
         function createRPGModel() {
             const group = new THREE.Group();
             const mainTube = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0), toonMat(0x222222));
             mainTube.rotation.x = Math.PI/2;
-            
             const woodGrip = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.4), toonMat(0x8B4513));
             woodGrip.rotation.x = Math.PI/2; woodGrip.position.z = 0.1;
-            
             const handle1 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.15, 0.06), toonMat(0x552211));
             handle1.position.set(0, -0.12, -0.1);
-            
-            const coneBack = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.1, 0.15), toonMat(0x222222));
-            coneBack.rotation.x = Math.PI/2; coneBack.position.z = 0.55;
-            
             const rocketGroup = new THREE.Group();
             const rTip = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 12), toonMat(0x4b5320));
             rTip.rotation.x = -Math.PI/2; rTip.position.z = -0.7;
             const rBody = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.4), toonMat(0x6b8e23));
             rBody.rotation.x = Math.PI/2; rBody.position.z = -0.5;
             rocketGroup.add(rTip, rBody);
-
-            group.add(mainTube, woodGrip, handle1, coneBack, rocketGroup);
+            group.add(mainTube, woodGrip, handle1, rocketGroup);
             return { group, rocket: rocketGroup };
         }
 
@@ -95,12 +94,11 @@
         camera.add(myRPG.group);
         scene.add(camera);
 
-        // --- TABS CHARACTER MODEL ---
+        // --- TABS MODEL ---
         function createPlayerModel(color) {
             const group = new THREE.Group();
             const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.25, 0.5, 4, 8), toonMat(color));
             torso.position.y = 1.05;
-
             const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), toonMat(0xeeeeee));
             head.position.y = 1.55;
             const visor = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.1, 4, 8), toonMat(0x111111));
@@ -124,29 +122,45 @@
             const armL = createLimb(false); armL.root.position.set(-0.35, 1.3, 0);
             const armR = createLimb(false); armR.root.position.set(0.35, 1.3, 0);
             
-            const holdRPG = createRPGModel();
-            holdRPG.group.scale.set(0.8, 0.8, 0.8);
-            holdRPG.group.position.set(0.3, 1.3, -0.2);
-
-            group.add(torso, head, legL.root, legR.root, armL.root, armR.root, holdRPG.group);
+            group.add(torso, head, legL.root, legR.root, armL.root, armR.root);
             return { group, torso, legL, legR, armL, armR };
         }
 
-        // --- PHYSICS & LOGIC ---
-        let health = 100, isDead = false, vel = new THREE.Vector3(), isReloading = false;
-        let move = { f: false, b: false, l: false, r: false, sprint: false, jump: false };
+        // --- STATE & PHYSICS ---
+        let health = 100, isDead = false, isReloading = false, vel = new THREE.Vector3();
+        let move = { f: false, b: false, l: false, r: false, sprint: false };
         let projectiles = [], explosions = [];
+
+        // --- RESTORED EXPLOSION & ROCKET JUMP ---
+        function createExplosion(pos) {
+            const group = new THREE.Group(); group.position.copy(pos);
+            for(let i=0; i<8; i++){
+                const b = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), toonMat(i % 2 === 0 ? 0xffa502 : 0xffffff));
+                b.position.set(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5);
+                group.add(b);
+            }
+            scene.add(group); explosions.push({ mesh: group, time: 0 });
+            
+            // Rocket Jump Physics
+            const dist = camera.position.distanceTo(pos);
+            if(dist < 6) {
+                const push = new THREE.Vector3().subVectors(camera.position, pos).normalize();
+                vel.add(push.multiplyScalar((6 - dist) * 8));
+            }
+            
+            Object.keys(players).forEach(id => {
+                if(players[id].group.position.distanceTo(pos) < 5) connections[id].send({ type: 'hit', damage: 35 });
+            });
+        }
 
         function fire() {
             if(isDead || !controls.isLocked || isReloading) return;
             isReloading = true; myRPG.rocket.visible = false;
-            
             const rocket = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.3), toonMat(0x6b8e23));
             rocket.position.copy(camera.position); rocket.quaternion.copy(camera.quaternion);
             const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-            rocket.userData = { vel: dir.multiplyScalar(0.8), life: 100 };
+            rocket.userData = { vel: dir.multiplyScalar(0.9), life: 120 };
             scene.add(rocket); projectiles.push(rocket);
-
             setTimeout(() => { myRPG.rocket.visible = true; isReloading = false; }, 1000);
         }
 
@@ -160,40 +174,51 @@
         peer.on('connection', setupConn);
 
         function setupConn(c) {
-            c.on('open', () => { connections[c.peer] = c; });
+            c.on('open', () => { connections[c.peer] = c; document.getElementById('status').innerText = `Connected: ${Object.keys(connections).length}`; });
             c.on('data', d => {
-                if(!players[c.peer]) {
-                    players[c.peer] = { ...createPlayerModel(Math.random()*0xffffff), target: new THREE.Vector3(), tRot: 0, anim: 0 };
-                    scene.add(players[c.peer].group);
+                if(d.type === 'hit') { health -= d.damage; if(health<=0 && !isDead) die(); updateUI(); }
+                else {
+                    if(!players[c.peer]) {
+                        players[c.peer] = { ...createPlayerModel(Math.random()*0xffffff), target: new THREE.Vector3(), tRot: 0, anim: 0 };
+                        scene.add(players[c.peer].group);
+                    }
+                    players[c.peer].target.set(d.x, d.y - 1.7, d.z); players[c.peer].tRot = d.ry;
+                    players[c.peer].moving = d.moving; players[c.peer].inAir = d.inAir;
                 }
-                players[c.peer].target.set(d.x, d.y - 1.7, d.z);
-                players[c.peer].tRot = d.ry;
-                players[c.peer].moving = d.moving;
-                players[c.peer].inAir = d.inAir;
             });
         }
 
-        setInterval(() => {
-            const isMoving = move.f || move.b || move.l || move.r;
-            const inAir = camera.position.y > 1.75;
-            Object.values(connections).forEach(c => {
-                if(c.open) c.send({ x: camera.position.x, y: camera.position.y, z: camera.position.z, ry: camera.rotation.y, moving: isMoving, inAir });
-            });
-        }, 16);
+        // --- RESTORED INVITE BUTTON ---
+        document.getElementById('copy-link').onclick = () => {
+            const link = `${window.location.origin}${window.location.pathname}?join=${peer.id}`;
+            navigator.clipboard.writeText(link);
+            alert("Invite Copied!");
+        };
 
-        // --- LOOP ---
+        function die() { isDead = true; document.getElementById('death-screen').style.display = 'flex'; controls.unlock(); setTimeout(() => { isDead = false; health = 100; updateUI(); document.getElementById('death-screen').style.display = 'none'; camera.position.set(0, 1.7, 0); controls.lock(); }, 3000); }
+        function updateUI() { document.getElementById('health-bar').style.width = health + "%"; }
+
+        // --- MAIN LOOP ---
+        const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
-            const delta = 0.016;
+            const delta = Math.min(clock.getDelta(), 0.1);
 
             projectiles.forEach((p, i) => {
                 p.position.add(p.userData.vel); p.userData.life--;
-                if(p.position.y < 0.1 || p.userData.life <= 0) { scene.remove(p); projectiles.splice(i,1); }
+                if(p.position.y < 0.1 || p.userData.life <= 0) { createExplosion(p.position); scene.remove(p); projectiles.splice(i,1); }
+            });
+
+            explosions.forEach((ex, i) => {
+                ex.time += delta; ex.mesh.scale.multiplyScalar(1.1);
+                if(ex.time > 0.4) { scene.remove(ex.mesh); explosions.splice(i, 1); }
             });
 
             if (controls.isLocked && !isDead) {
                 vel.y -= 25 * delta;
-                const speed = move.sprint ? 0.25 : 0.15;
+                const speed = move.sprint ? 0.3 : 0.15;
+                const isMoving = move.f || move.b || move.l || move.r;
+                document.getElementById('speed-lines').style.opacity = (move.sprint && isMoving) ? "1" : "0";
                 const dir = new THREE.Vector3(Number(move.r)-Number(move.l), 0, Number(move.f)-Number(move.b)).normalize();
                 controls.moveRight(dir.x * speed); controls.moveForward(dir.z * speed);
                 camera.position.y += vel.y * delta;
@@ -204,41 +229,29 @@
                 const p = players[id];
                 p.group.position.lerp(p.target, 0.2);
                 p.group.rotation.y = p.tRot + Math.PI;
-
                 if(p.inAir) {
-                    // FLAILING ANIMATION
                     p.anim += delta * 15;
-                    p.legL.root.rotation.z = Math.sin(p.anim) * 0.5;
-                    p.legR.root.rotation.z = Math.cos(p.anim) * 0.5;
-                    p.armL.root.rotation.x = Math.sin(p.anim) * 1.5;
-                    p.armR.root.rotation.x = Math.cos(p.anim) * 1.5;
+                    p.legL.root.rotation.z = Math.sin(p.anim) * 0.5; p.legR.root.rotation.z = Math.cos(p.anim) * 0.5;
                 } else if(p.moving) {
                     p.anim += delta * 12;
                     const swing = Math.sin(p.anim) * 0.8;
-                    const knee = Math.max(0, Math.cos(p.anim)) * 0.9;
-                    p.legL.root.rotation.x = swing; p.legL.lower.rotation.x = knee;
+                    p.legL.root.rotation.x = swing; p.legL.lower.rotation.x = Math.max(0, Math.cos(p.anim)) * 0.9;
                     p.legR.root.rotation.x = -swing; p.legR.lower.rotation.x = Math.max(0, Math.cos(p.anim + Math.PI)) * 0.9;
-                    p.armL.root.rotation.x = -swing * 0.4; p.armR.root.rotation.x = swing * 0.4;
                 } else {
-                    p.legL.root.rotation.x = p.legR.root.rotation.x = 0;
-                    p.legL.lower.rotation.x = p.legR.lower.rotation.x = 0;
-                    p.armL.root.rotation.x = p.armR.root.rotation.x = 0;
+                    p.legL.root.rotation.x = p.legR.root.rotation.x = p.legL.lower.rotation.x = 0;
                 }
             }
             effect.render(scene, camera);
         }
 
-        window.onkeydown = (e) => {
-            if(e.code==='KeyW') move.f=true; if(e.code==='KeyS') move.b=true;
-            if(e.code==='KeyA') move.l=true; if(e.code==='KeyD') move.r=true;
-            if(e.code==='ShiftLeft') move.sprint=true;
-            if(e.code==='Space' && camera.position.y <= 1.71) vel.y = 10;
-        };
-        window.onkeyup = (e) => {
-            if(e.code==='KeyW') move.f=false; if(e.code==='KeyS') move.b=false;
-            if(e.code==='KeyA') move.l=false; if(e.code==='KeyD') move.r=false;
-            if(e.code==='ShiftLeft') move.sprint=false;
-        };
+        setInterval(() => {
+            if(peer.id) Object.values(connections).forEach(c => {
+                if(c.open) c.send({ x: camera.position.x, y: camera.position.y, z: camera.position.z, ry: camera.rotation.y, moving: (move.f||move.b||move.l||move.r), inAir: camera.position.y > 1.8 });
+            });
+        }, 16);
+
+        window.onkeydown = (e) => { if(e.code==='KeyW') move.f=true; if(e.code==='KeyS') move.b=true; if(e.code==='KeyA') move.l=true; if(e.code==='KeyD') move.r=true; if(e.code==='ShiftLeft') move.sprint=true; if(e.code==='Space' && camera.position.y <= 1.71) vel.y = 10; };
+        window.onkeyup = (e) => { if(e.code==='KeyW') move.f=false; if(e.code==='KeyS') move.b=false; if(e.code==='KeyA') move.l=false; if(e.code==='KeyD') move.r=false; if(e.code==='ShiftLeft') move.sprint=false; };
         document.addEventListener('mousedown', () => { if(!controls.isLocked) controls.lock(); else fire(); });
         animate();
     </script>
