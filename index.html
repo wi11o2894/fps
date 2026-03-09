@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOON FPS: v7.7 DESTRUCTIBLE WORLD</title>
+    <title>TOON FPS: v7.8 STABLE VIEW</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
-        canvas { display: block; }
+        canvas { display: block; width: 100vw; height: 100vh; }
         #gui { position: absolute; top: 20px; left: 20px; z-index: 10; background: white; border: 4px solid black; padding: 15px; box-shadow: 8px 8px 0px rgba(0,0,0,0.1); }
         #crosshair { position: absolute; top: 50%; left: 50%; width: 12px; height: 12px; border: 2px solid black; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
         #health-container { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 300px; height: 25px; border: 4px solid black; background: #333; z-index: 10; }
@@ -22,7 +22,7 @@
     <div id="crosshair"></div>
     <div id="health-container"><div id="health-bar"></div></div>
     <div id="gui">
-        <div style="font-weight: bold;">TOON FPS v7.7</div>
+        <div style="font-weight: bold;">TOON FPS v7.8</div>
         <div id="my-id" style="font-size: 10px; color: #666;">ID: Connecting...</div>
         <div id="status" style="font-size: 10px; color: #2ed573;">Waiting for players...</div>
         <button id="copy-link">SHARE INVITE</button>
@@ -49,13 +49,14 @@
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
         const effect = new OutlineEffect(renderer, { defaultThickness: 0.005 });
         const controls = new PointerLockControls(camera, document.body);
         const toonMat = (color) => new THREE.MeshToonMaterial({ color });
 
-        // --- WORLD, GRASS & DESTRUCTIBLES ---
+        // --- WORLD & GRASS ---
         const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), toonMat(0x2ed573));
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
@@ -66,6 +67,7 @@
             scene.add(blade);
         }
 
+        // --- DESTRUCTIBLE CRATES ---
         const crates = [];
         const crateMat = toonMat(0xcd853f);
         function spawnCrate(x, z) {
@@ -81,7 +83,7 @@
         sun.position.set(10, 20, 10);
         scene.add(sun);
 
-        // --- RPG & PLAYER MODELS (AS BEFORE) ---
+        // --- RPG MODEL ---
         function createRPGModel() {
             const group = new THREE.Group();
             const mainTube = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0), toonMat(0x222222));
@@ -105,6 +107,7 @@
         camera.add(myRPG.group);
         scene.add(camera);
 
+        // --- PLAYER MODEL + GOOGLY EYES ---
         function createPlayerModel(color) {
             const group = new THREE.Group();
             const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.25, 0.5, 4, 8), toonMat(color));
@@ -140,7 +143,7 @@
             return { group, torso, legL, legR, armL, armR, leftEye, rightEye };
         }
 
-        // --- GAME STATE & PHYSICS ---
+        // --- PHYSICS & VFX ---
         let health = 100, isDead = false, isReloading = false, vel = new THREE.Vector3();
         let move = { f: false, b: false, l: false, r: false, sprint: false };
         let projectiles = [], explosions = [], particles = [], fragments = [];
@@ -153,44 +156,32 @@
                 group.add(b);
             }
             scene.add(group); explosions.push({ mesh: group, time: 0 });
-            
-            // Rocket Jump
             const dist = camera.position.distanceTo(pos);
             if(dist < 6) {
                 const push = new THREE.Vector3().subVectors(camera.position, pos).normalize();
                 vel.add(push.multiplyScalar((6 - dist) * 8));
             }
-            
-            // Crate Destruction
             for(let i = crates.length - 1; i >= 0; i--) {
-                if(crates[i].position.distanceTo(pos) < 3.5) {
-                    shatterCrate(crates[i]);
-                    crates.splice(i, 1);
-                }
+                if(crates[i].position.distanceTo(pos) < 3.5) { shatterCrate(crates[i]); crates.splice(i, 1); }
             }
-            
             Object.keys(players).forEach(id => {
                 if(players[id].group.position.distanceTo(pos) < 5) connections[id].send({ type: 'hit', damage: 35 });
             });
         }
 
         function shatterCrate(crate) {
-            const pos = crate.position.clone();
-            scene.remove(crate);
+            const pos = crate.position.clone(); scene.remove(crate);
             for(let i=0; i<6; i++) {
                 const frag = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), crateMat);
                 frag.position.copy(pos).add(new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5));
-                frag.userData = { vel: new THREE.Vector3(Math.random()-0.5, 0.5 + Math.random(), Math.random()-0.5).multiplyScalar(5), life: 2.0 };
-                scene.add(frag);
-                fragments.push(frag);
+                frag.userData = { vel: new THREE.Vector3(Math.random()-0.5, 0.5+Math.random(), Math.random()-0.5).multiplyScalar(5), life: 2.0 };
+                scene.add(frag); fragments.push(frag);
             }
         }
 
         function spawnSmoke(pos) {
             const s = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 }));
-            s.position.copy(pos);
-            scene.add(s);
-            particles.push({ mesh: s, life: 1.0 });
+            s.position.copy(pos); scene.add(s); particles.push({ mesh: s, life: 1.0 });
         }
 
         function fire() {
@@ -235,6 +226,13 @@
         function die() { isDead = true; document.getElementById('death-screen').style.display = 'flex'; controls.unlock(); setTimeout(() => { isDead = false; health = 100; updateUI(); document.getElementById('death-screen').style.display = 'none'; camera.position.set(0, 1.7, 0); controls.lock(); }, 3000); }
         function updateUI() { document.getElementById('health-bar').style.width = health + "%"; }
 
+        // --- WINDOW RESIZE FIX ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
         // --- MAIN LOOP ---
         const clock = new THREE.Clock();
         function animate() {
@@ -253,10 +251,8 @@
             });
 
             fragments.forEach((f, i) => {
-                f.userData.vel.y -= 15 * delta;
-                f.position.add(f.userData.vel.clone().multiplyScalar(delta));
-                f.userData.life -= delta;
-                if(f.position.y < 0.2) { f.position.y = 0.2; f.userData.vel.set(0,0,0); }
+                f.userData.vel.y -= 15 * delta; f.position.add(f.userData.vel.clone().multiplyScalar(delta));
+                f.userData.life -= delta; if(f.position.y < 0.2) { f.position.y = 0.2; f.userData.vel.set(0,0,0); }
                 if(f.userData.life <= 0) { scene.remove(f); fragments.splice(i, 1); }
             });
 
