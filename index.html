@@ -3,28 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOON FPS: v8.7 BULLET DROP</title>
+    <title>TOON FPS: v9.0 MASTER</title>
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1a0500; font-family: 'Courier New', monospace; }
         canvas { display: block; width: 100vw; height: 100vh; }
         #gui { position: absolute; top: 20px; left: 20px; z-index: 10; background: white; border: 4px solid black; padding: 15px; box-shadow: 8px 8px 0px rgba(0,0,0,0.1); }
         #crosshair { position: absolute; top: 50%; left: 50%; width: 12px; height: 12px; border: 2px solid black; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
+        #reload-indicator { position: absolute; bottom: 65px; left: 50%; transform: translateX(-50%); font-weight: bold; color: #ff4757; display: none; text-shadow: 2px 2px 0px black; font-size: 20px; }
         #health-container { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 300px; height: 25px; border: 4px solid black; background: #333; z-index: 10; }
         #health-bar { width: 100%; height: 100%; background: #2ed573; transition: width 0.2s; }
-        #death-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; color: white; }
+        #death-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,69,0,0.6); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; color: white; text-shadow: 4px 4px 0px black; }
         #speed-lines { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; opacity: 0; background: radial-gradient(circle, transparent 25%, rgba(255,255,255,0.7) 100%); mask-image: repeating-conic-gradient(from 0deg, black 0deg 2deg, transparent 2deg 15deg); -webkit-mask-image: repeating-conic-gradient(from 0deg, black 0deg 2deg, transparent 2deg 15deg); transition: opacity 0.1s; }
         button { background: #ff4757; color: white; border: 2px solid black; padding: 5px; cursor: pointer; width: 100%; margin-top: 10px; font-weight: bold; }
     </style>
 </head>
 <body>
-    <div id="death-screen"><h1>DEFEATED</h1><p>RESPAWNING...</p></div>
+    <div id="death-screen"><h1>MOLTEN DEFEAT</h1><p>RESPAWNING...</p></div>
+    <div id="reload-indicator">RELOADING...</div>
     <div id="speed-lines"></div>
     <div id="crosshair"></div>
     <div id="health-container"><div id="health-bar"></div></div>
     <div id="gui">
-        <div style="font-weight: bold;">TOON FPS v8.7</div>
+        <div style="font-weight: bold;">TOON FPS v9.0</div>
         <div id="my-id" style="font-size: 10px; color: #666;">ID: Connecting...</div>
         <button id="copy-link">SHARE INVITE</button>
+        <div style="font-size: 9px; margin-top: 5px;">WASD: Move | SPACE: Jump | C: Crouch | SHIFT: Sprint</div>
     </div>
 
     <script type="importmap">
@@ -43,241 +46,219 @@
         import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
         import { Peer } from 'peerjs';
 
-        // --- AUDIO SYNTH ---
+        // --- AUDIO ENGINE ---
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const playSynth = {
             fire: () => {
                 const osc = audioCtx.createOscillator(); const g = audioCtx.createGain();
-                osc.type = 'triangle'; osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
-                g.gain.setValueAtTime(0.3, audioCtx.currentTime); g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
-                osc.connect(g); g.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(160, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.15);
+                g.gain.setValueAtTime(0.4, audioCtx.currentTime); g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+                osc.connect(g); g.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.3);
             },
             explosion: () => {
-                const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.5, audioCtx.sampleRate);
-                const data = buf.getChannelData(0); for(let i=0; i<buf.length; i++) data[i] = Math.random()*2-1;
-                const src = audioCtx.createBufferSource(); src.buffer = buf;
-                const f = audioCtx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(400, audioCtx.currentTime);
-                const g = audioCtx.createGain(); g.gain.setValueAtTime(0.5, audioCtx.currentTime); g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
-                src.connect(f); f.connect(g); g.connect(audioCtx.destination); src.start();
+                const b = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.4, audioCtx.sampleRate);
+                const d = b.getChannelData(0); for(let i=0; i<b.length; i++) d[i] = Math.random()*2-1;
+                const s = audioCtx.createBufferSource(); s.buffer = b;
+                const f = audioCtx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(500, audioCtx.currentTime);
+                const g = audioCtx.createGain(); g.gain.setValueAtTime(0.6, audioCtx.currentTime); g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.4);
+                s.connect(f); f.connect(g); g.connect(audioCtx.destination); s.start();
             },
             jump: () => {
                 const osc = audioCtx.createOscillator(); const g = audioCtx.createGain();
-                osc.frequency.setValueAtTime(100, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime+0.1);
-                g.gain.setValueAtTime(0.1, audioCtx.currentTime); g.gain.linearRampToValueAtTime(0, audioCtx.currentTime+0.2);
+                osc.frequency.setValueAtTime(120, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime+0.1);
+                g.gain.setValueAtTime(0.15, audioCtx.currentTime); g.gain.linearRampToValueAtTime(0, audioCtx.currentTime+0.2);
                 osc.connect(g); g.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime+0.2);
-            },
-            smash: () => {
-                const osc = audioCtx.createOscillator(); osc.type = 'square';
-                osc.frequency.setValueAtTime(120, audioCtx.currentTime);
-                const g = audioCtx.createGain(); g.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.1);
-                osc.connect(g); g.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.1);
             }
         };
 
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87CEEB);
+        scene.background = new THREE.Color(0x1a0500);
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
-        const effect = new OutlineEffect(renderer, { defaultThickness: 0.005 });
+        const effect = new OutlineEffect(renderer, { defaultThickness: 0.004 });
         const controls = new PointerLockControls(camera, document.body);
         const toonMat = (color) => new THREE.MeshToonMaterial({ color });
 
-        // --- WORLD ---
-        const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), toonMat(0x2ed573));
-        floor.rotation.x = -Math.PI/2; scene.add(floor);
-        for(let i=0; i<400; i++) {
-            const b = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.4), toonMat(0x26af5b));
-            b.position.set(Math.random()*80-40, 0.2, Math.random()*80-40);
-            b.rotation.y = Math.random()*Math.PI; scene.add(b);
-        }
+        // --- MAP & LAVA ---
+        const lavaMat = new THREE.MeshBasicMaterial({ color: 0xff4500 });
+        const lava = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), lavaMat);
+        lava.rotation.x = -Math.PI/2; lava.position.y = -3; scene.add(lava);
 
-        const crates = [];
-        function createPlankCrate(x, z) {
-            const group = new THREE.Group();
-            const wCol = 0x8B4513; const dCol = 0x5D2906;
-            const createFace = (rX, rY, pos) => {
-                const f = new THREE.Group();
-                for(let i=0; i<3; i++) {
-                    const p = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.38, 0.05), toonMat(wCol));
-                    p.position.y = (i-1)*0.4; f.add(p);
-                }
-                const fr = new THREE.Mesh(new THREE.BoxGeometry(1.25, 1.25, 0.02), toonMat(dCol));
-                fr.position.z = -0.02; f.add(fr);
-                f.rotation.set(rX, rY, 0); f.position.copy(pos); return f;
-            };
-            group.add(createFace(0,0,new THREE.Vector3(0,0,0.6)), createFace(0,Math.PI,new THREE.Vector3(0,0,-0.6)), createFace(0,Math.PI/2,new THREE.Vector3(0.6,0,0)), createFace(0,-Math.PI/2,new THREE.Vector3(-0.6,0,0)), createFace(Math.PI/2,0,new THREE.Vector3(0,0.6,0)), createFace(-Math.PI/2,0,new THREE.Vector3(0,-0.6,0)));
-            group.position.set(x, 0.6, z); scene.add(group); crates.push(group);
-        }
-        for(let i=0; i<15; i++) createPlankCrate(Math.random()*40-20, Math.random()*40-20);
-        scene.add(new THREE.AmbientLight(0xffffff, 1.2));
-        const sun = new THREE.DirectionalLight(0xffffff, 0.8); sun.position.set(10,20,10); scene.add(sun);
+        const platforms = [], ladders = [];
+        const createPlat = (w,h,d,x,y,z) => {
+            const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), toonMat(0x444444));
+            m.position.set(x,y,z); scene.add(m); platforms.push(m);
+        };
+        createPlat(12, 1, 12, 0, 4, 0); // Center
+        createPlat(8, 1, 8, 18, 9, 18); // High Point
+        createPlat(8, 1, 8, -18, 7, -18); // Mid Point
+        
+        // The Bridge
+        createPlat(18, 0.2, 3, 10, 4, 0); 
+        // The Tightrope
+        const rope = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 25), toonMat(0xdddddd));
+        rope.position.set(-10, 7, -10); rope.rotation.y = Math.PI/4; scene.add(rope); platforms.push(rope);
 
-        // --- RPG MODEL ---
-        function createRPGModel() {
-            const group = new THREE.Group();
-            const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0), toonMat(0x222222)); tube.rotation.x = Math.PI/2;
-            const wood = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.4), toonMat(0x8B4513)); wood.rotation.x = Math.PI/2; wood.position.z = 0.1;
-            const handle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.15, 0.06), toonMat(0x552211)); handle.position.set(0, -0.12, -0.1);
-            const rGroup = new THREE.Group();
-            const rTip = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 12), toonMat(0x4b5320)); rTip.rotation.x = -Math.PI/2; rTip.position.z = -0.7;
-            const rBody = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.4), toonMat(0x6b8e23)); rBody.rotation.x = Math.PI/2; rBody.position.z = -0.5;
-            rGroup.add(rTip, rBody); group.add(tube, wood, handle, rGroup); return { group, rocket: rGroup };
-        }
-        const myRPG = createRPGModel(); myRPG.group.position.set(0.4, -0.4, -0.6); camera.add(myRPG.group); scene.add(camera);
-
-        // --- PLAYER MODEL ---
-        function createPlayerModel(color) {
+        // Ladder
+        const createLad = (x,z,h) => {
             const g = new THREE.Group();
-            const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.25, 0.5, 4, 8), toonMat(color)); torso.position.y = 1.05;
-            const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), toonMat(0xeeeeee)); head.position.y = 1.55;
-            const createEye = (s) => {
-                const eg = new THREE.Group(); 
-                const w = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), toonMat(0xffffff));
-                const p = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), toonMat(0x000000)); p.position.z = 0.04;
-                eg.add(w, p); eg.position.set(s*0.1, 0.05, -0.16); return { eg, p };
-            };
-            const eL = createEye(-1); const eR = createEye(1); head.add(eL.eg, eR.eg);
-            const createLimb = (isLeg) => {
-                const root = new THREE.Group(); const up = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.25, 4, 8), toonMat(isLeg ? 0x222222 : color)); up.position.y = -0.125;
-                const lowG = new THREE.Group(); lowG.position.y = -0.25; const low = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.25, 4, 8), toonMat(isLeg ? 0x222222 : color));
-                low.position.y = -0.125; lowG.add(low); root.add(up, lowG); return { root, lowG };
-            };
-            const lL = createLimb(true); lL.root.position.set(-0.15, 0.8, 0);
-            const lR = createLimb(true); lR.root.position.set(0.15, 0.8, 0);
-            g.add(torso, head, lL.root, lR.root); return { group: g, lL, lR, eL, eR };
-        }
+            for(let i=0; i<h; i+=0.5) {
+                const s = new THREE.Mesh(new THREE.BoxGeometry(1, 0.08, 0.1), toonMat(0xaaaaaa));
+                s.position.y = i; g.add(s);
+            }
+            g.position.set(x, 0, z); scene.add(g); ladders.push({x,z,h});
+        };
+        createLad(6, 6, 9.5);
 
-        // --- GAME LOGIC ---
+        // --- DETAILED RPG ---
+        function createRPG() {
+            const g = new THREE.Group();
+            const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.2), toonMat(0x222222)); tube.rotation.x = Math.PI/2;
+            const shield = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.5), toonMat(0x8B4513)); shield.rotation.x = Math.PI/2; shield.position.z = 0.15;
+            const handle = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.2, 0.08), toonMat(0x333333)); handle.position.set(0, -0.15, -0.2);
+            const rG = new THREE.Group();
+            const rTip = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.35, 12), toonMat(0x4b5320)); rTip.rotation.x = -Math.PI/2; rTip.position.z = -0.85;
+            const rBody = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4), toonMat(0x6b8e23)); rBody.rotation.x = Math.PI/2; rBody.position.z = -0.6;
+            rG.add(rTip, rBody); g.add(tube, shield, handle, rG); return { g, rocket: rG };
+        }
+        const rpg = createRPG(); rpg.g.position.set(0.4, -0.4, -0.7); camera.add(rpg.g); scene.add(camera);
+
+        // --- GAMEPLAY VARS ---
         let health = 100, isDead = false, isReloading = false, vel = new THREE.Vector3();
-        let move = { f: false, b: false, l: false, r: false, sprint: false, crouch: false };
-        let proj = [], expl = [], particles = [], frags = [];
-        let baseH = 1.7, crouchH = 1.0, targetH = 1.7;
+        let move = { f: 0, b: 0, l: 0, r: 0, sprint: false, crouch: false };
+        let proj = [], expl = [];
+        const baseH = 1.7, crouchH = 1.0; let targetH = 1.7;
 
-        function createExplosion(pos) {
+        function doExplode(pos) {
             playSynth.explosion();
-            const g = new THREE.Group(); g.position.copy(pos);
-            for(let i=0; i<8; i++){
-                const b = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), toonMat(i%2===0?0xffa502:0xffffff));
-                b.position.set(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5); g.add(b);
-            }
-            scene.add(g); expl.push({ mesh: g, time: 0 });
+            // Glow FX
+            const g = new THREE.Mesh(new THREE.SphereGeometry(1.8, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffcc00, transparent: true }));
+            g.position.copy(pos); scene.add(g); expl.push({ m: g, t: 0 });
+            // Rocket Jump & Damage
             const d = camera.position.distanceTo(pos);
-            if(d < 7.5) {
-                const dir = new THREE.Vector3().subVectors(camera.position, pos).normalize();
-                const p = (7.5 - d); vel.x += dir.x * p * 8; vel.z += dir.z * p * 8; vel.y += p * 4;
-            }
-            Object.keys(players).forEach(id => {
-                if(players[id].group.position.distanceTo(pos) < 7.5) {
-                    const pD = new THREE.Vector3().subVectors(players[id].group.position, pos).normalize();
-                    connections[id].send({ type: 'repel', x: pD.x*8, y: 5, z: pD.z*8, damage: 35 });
-                }
-            });
-            for(let i=crates.length-1; i>=0; i--) if(crates[i].position.distanceTo(pos) < 3.5) { shatterCrate(crates[i]); crates.splice(i,1); }
-        }
-
-        function shatterCrate(c) {
-            playSynth.smash(); const pos = c.position.clone(); scene.remove(c);
-            for(let i=0; i<8; i++) {
-                const f = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.2, 0.1), toonMat(0x8B4513));
-                f.position.copy(pos).add(new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5));
-                f.userData = { v: new THREE.Vector3(Math.random()-0.5, 1+Math.random(), Math.random()-0.5).multiplyScalar(5), life: 2.5 };
-                scene.add(f); frags.push(f);
+            if(d < 8) {
+                const p = (8-d); const dir = new THREE.Vector3().subVectors(camera.position, pos).normalize();
+                vel.x += dir.x * p * 9; vel.z += dir.z * p * 9; vel.y += p * 5.5;
+                if(d < 3) { health -= 20; updateUI(); }
             }
         }
 
         function fire() {
             if(isDead || !controls.isLocked || isReloading) return;
             if(audioCtx.state === 'suspended') audioCtx.resume();
-            playSynth.fire(); isReloading = true; myRPG.rocket.visible = false;
+            playSynth.fire(); isReloading = true; rpg.rocket.visible = false;
+            document.getElementById('reload-indicator').style.display = 'block';
+            
             const r = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.3), toonMat(0x6b8e23));
             r.position.copy(camera.position); r.quaternion.copy(camera.quaternion);
-            const d = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
-            // Bullet Drop: velocity + gravity force
-            r.userData = { v: d.multiplyScalar(0.9), life: 180, gravity: 0.005 }; 
+            const dir = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+            r.userData = { v: dir.multiplyScalar(1.0), life: 200, grav: 0.005 };
             scene.add(r); proj.push(r);
-            setTimeout(() => { myRPG.rocket.visible = true; isReloading = false; }, 1000);
+
+            setTimeout(() => { 
+                rpg.rocket.visible = true; isReloading = false; 
+                document.getElementById('reload-indicator').style.display = 'none';
+            }, 2500);
         }
 
-        // --- NETWORKING ---
+        function die() {
+            isDead = true; document.getElementById('death-screen').style.display='flex';
+            controls.unlock();
+            setTimeout(() => {
+                isDead = false; health = 100; updateUI();
+                camera.position.set(0, 6, 0); vel.set(0,0,0);
+                document.getElementById('death-screen').style.display='none';
+                controls.lock();
+            }, 2000);
+        }
+
+        function updateUI() { 
+            document.getElementById('health-bar').style.width = health + "%"; 
+            if(health <= 0 && !isDead) die();
+        }
+
+        // --- NETWORKING (P2P) ---
         const peer = new Peer(); const players = {}, connections = {};
-        peer.on('open', id => { document.getElementById('my-id').innerText = "ID: " + id; const j = new URLSearchParams(window.location.search).get('join'); if(j) setupConn(peer.connect(j)); });
-        peer.on('connection', setupConn);
-        function setupConn(c) {
-            c.on('open', () => { connections[c.peer] = c; });
+        peer.on('open', id => { document.getElementById('my-id').innerText = "ID: " + id; const j = new URLSearchParams(window.location.search).get('join'); if(j) setup(peer.connect(j)); });
+        peer.on('connection', setup);
+        function setup(c) {
+            c.on('open', () => connections[c.peer] = c);
             c.on('data', d => {
-                if(d.type === 'repel') { vel.add(new THREE.Vector3(d.x, d.y, d.z)); health -= d.damage; if(health<=0 && !isDead) die(); updateUI(); }
-                else {
-                    if(!players[c.peer]) { players[c.peer] = { ...createPlayerModel(Math.random()*0xffffff), target: new THREE.Vector3(), tRot: 0, anim: 0 }; scene.add(players[c.peer].group); }
-                    players[c.peer].target.set(d.x, d.y-1.7, d.z); players[c.peer].tRot = d.ry; players[c.peer].moving = d.moving;
-                }
+                if(!players[c.peer]) { players[c.peer] = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1), toonMat(0x00ffff)); scene.add(players[c.peer]); }
+                players[c.peer].position.set(d.x, d.y-1, d.z);
             });
         }
-        document.getElementById('copy-link').onclick = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?join=${peer.id}`); alert("Link Copied!"); };
-        function die() { isDead = true; document.getElementById('death-screen').style.display='flex'; controls.unlock(); setTimeout(()=> { isDead=false; health=100; updateUI(); document.getElementById('death-screen').style.display='none'; camera.position.set(0,1.7,0); controls.lock(); }, 3000); }
-        function updateUI() { document.getElementById('health-bar').style.width = health+"%"; }
+        document.getElementById('copy-link').onclick = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?join=${peer.id}`); alert("Invite Link Copied!"); };
 
         const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
             const dt = Math.min(clock.getDelta(), 0.1);
-            
+            const time = Date.now() * 0.004;
+
+            lavaMat.color.setHSL(0.04, 1, 0.4 + Math.sin(time)*0.15); // Lava Pulse
+
             proj.forEach((p, i) => {
-                // Apply Drop
-                p.userData.v.y -= p.userData.gravity;
-                p.position.add(p.userData.v);
-                
-                // Align rocket model with velocity vector
-                const lookTarget = p.position.clone().add(p.userData.v);
-                p.lookAt(lookTarget);
-                p.rotateX(Math.PI/2); // Re-orient capsule geometry
-
-                p.userData.life--;
-                crates.forEach(c => { if(p.position.distanceTo(c.position) < 1.0) p.userData.life = 0; });
-                if(p.position.y < 0.1 || p.userData.life <= 0) { createExplosion(p.position); scene.remove(p); proj.splice(i,1); }
+                p.userData.v.y -= p.userData.grav; p.position.add(p.userData.v);
+                p.lookAt(p.position.clone().add(p.userData.v)); p.rotateX(Math.PI/2);
+                platforms.forEach(plat => { if(new THREE.Box3().setFromObject(plat).containsPoint(p.position)) p.userData.life = 0; });
+                if(p.position.y < -2.5 || p.userData.life <= 0) { doExplode(p.position); scene.remove(p); proj.splice(i,1); }
             });
-            
-            particles.forEach((p,i) => { p.l -= dt*1.5; p.m.scale.multiplyScalar(1.05); p.m.material.opacity = p.l; if(p.l<=0) { scene.remove(p.m); particles.splice(i,1); } });
-            frags.forEach((f,i) => { f.userData.v.y -= 15*dt; f.position.add(f.userData.v.clone().multiplyScalar(dt)); if(f.position.y < 0.1) f.position.y = 0.1; f.userData.life -= dt; if(f.userData.life<=0) { scene.remove(f); frags.splice(i,1); } });
-            expl.forEach((ex,i) => { ex.time += dt; ex.mesh.scale.multiplyScalar(1.1); if(ex.time>0.4) { scene.remove(ex.mesh); expl.splice(i,1); } });
 
-            if (controls.isLocked && !isDead) {
-                vel.y -= 25 * dt;
-                const spd = move.crouch ? 0.08 : (move.sprint ? 0.3 : 0.15);
+            expl.forEach((ex,i) => {
+                ex.t += dt; ex.m.scale.multiplyScalar(1.08);
+                ex.m.material.opacity = 1 - (ex.t/0.4);
+                if(ex.t > 0.4) { scene.remove(ex.m); expl.splice(i,1); }
+            });
+
+            if(controls.isLocked && !isDead) {
+                vel.y -= 26 * dt; // Gravity
                 targetH = move.crouch ? crouchH : baseH;
-                const isMov = move.f || move.b || move.l || move.r;
-                document.getElementById('speed-lines').style.opacity = (move.sprint && isMov && !move.crouch) ? "1" : "0";
-                const oP = camera.position.clone();
-                const d = new THREE.Vector3(Number(move.r)-Number(move.l), 0, Number(move.f)-Number(move.b)).normalize();
-                controls.moveRight(d.x*spd); controls.moveForward(d.z*spd);
-                camera.position.x += vel.x*dt; camera.position.z += vel.z*dt; camera.position.y += vel.y*dt;
-                let onC = false;
-                crates.forEach(c => {
-                    const dx = Math.abs(camera.position.x - c.position.x), dz = Math.abs(camera.position.z - c.position.z), dy = camera.position.y - c.position.y;
-                    if(dx < 0.9 && dz < 0.9) {
-                        if(dy > 0.3 && dy < 1.5) { camera.position.y = c.position.y + 0.6 + targetH; vel.y = 0; onC = true; }
-                        else if (dy < 0.3) { camera.position.x = oP.x; camera.position.z = oP.z; }
+                const spd = move.crouch ? 0.07 : (move.sprint ? 0.3 : 0.15);
+                
+                document.getElementById('speed-lines').style.opacity = (move.sprint && (move.f||move.b)) ? "1" : "0";
+
+                controls.moveRight((move.r - move.l) * spd);
+                controls.moveForward((move.f - move.b) * spd);
+                camera.position.y += vel.y * dt;
+                camera.position.x += vel.x * dt; camera.position.z += vel.z * dt;
+
+                if(camera.position.y < -1.5) die();
+
+                platforms.forEach(p => {
+                    const b = new THREE.Box3().setFromObject(p);
+                    if(b.containsPoint(new THREE.Vector3(camera.position.x, camera.position.y - targetH, camera.position.z))) {
+                        camera.position.y = p.position.y + (p.geometry.parameters.height/2 || 0.1) + targetH;
+                        vel.y = 0;
                     }
                 });
-                if(camera.position.y < targetH && !onC) { camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetH, 0.2); if(vel.y < 0) vel.y = 0; }
-                vel.x *= 0.92; vel.z *= 0.92; 
+
+                ladders.forEach(l => {
+                    const d = new THREE.Vector2(camera.position.x, camera.position.z).distanceTo(new THREE.Vector2(l.x, l.z));
+                    if(d < 1.1 && move.f) vel.y = 6;
+                });
+
+                vel.x *= 0.94; vel.z *= 0.94;
             }
-            for(let id in players) {
-                const p = players[id]; p.group.position.lerp(p.target, 0.2); p.group.rotation.y = p.tRot + Math.PI;
-                if(p.moving) { p.anim += dt*12; p.lL.root.rotation.x = Math.sin(p.anim)*0.8; p.lR.root.rotation.x = -Math.sin(p.anim)*0.8; }
-            }
+
+            if(peer.id) Object.values(connections).forEach(c => c.send({x: camera.position.x, y: camera.position.y, z: camera.position.z}));
+            
+            scene.add(new THREE.AmbientLight(0xffffff, 0.4));
             effect.render(scene, camera);
         }
-        setInterval(() => { if(peer.id) Object.values(connections).forEach(c => { if(c.open) c.send({ x: camera.position.x, y: camera.position.y, z: camera.position.z, ry: camera.rotation.y, moving: (move.f||move.b||move.l||move.r) }); }); }, 16);
-        window.onkeydown = (e) => { 
-            if(e.code==='KeyW') move.f=true; if(e.code==='KeyS') move.b=true; if(e.code==='KeyA') move.l=true; if(e.code==='KeyD') move.r=true; 
+
+        window.onkeydown = (e) => {
+            if(e.code==='KeyW') move.f=1; if(e.code==='KeyS') move.b=1; if(e.code==='KeyA') move.l=1; if(e.code==='KeyD') move.r=1;
             if(e.code==='ShiftLeft') move.sprint=true; if(e.code==='KeyC') move.crouch=true;
-            if(e.code==='Space' && !move.crouch && camera.position.y <= targetH + 0.1) { vel.y = 10; playSynth.jump(); }
+            if(e.code==='Space' && !move.crouch) { vel.y = 11; playSynth.jump(); }
         };
-        window.onkeyup = (e) => { if(e.code==='KeyW') move.f=false; if(e.code==='KeyS') move.b=false; if(e.code==='KeyA') move.l=false; if(e.code==='KeyD') move.r=false; if(e.code==='ShiftLeft') move.sprint=false; if(e.code==='KeyC') move.crouch=false; };
+        window.onkeyup = (e) => {
+            if(e.code==='KeyW') move.f=0; if(e.code==='KeyS') move.b=0; if(e.code==='KeyA') move.l=0; if(e.code==='KeyD') move.r=0;
+            if(e.code==='ShiftLeft') move.sprint=false; if(e.code==='KeyC') move.crouch=false;
+        };
         document.addEventListener('mousedown', () => { if(!controls.isLocked) controls.lock(); else fire(); });
         animate();
     </script>
