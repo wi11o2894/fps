@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Toon FPS: Smooth & Stable</title>
+    <title>Toon FPS: Refined Sprint</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
         canvas { display: block; }
@@ -52,7 +52,6 @@
 
         const toonMat = (color) => new THREE.MeshToonMaterial({ color, side: THREE.DoubleSide });
 
-        // --- WORLD ---
         const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), toonMat(0x2ed573));
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
@@ -71,7 +70,6 @@
         sun.position.set(10, 20, 10);
         scene.add(sun);
 
-        // --- PLAYER ---
         const hand = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), toonMat(0xffdbac));
         hand.position.set(0.4, -0.4, -0.6);
         camera.add(hand);
@@ -88,7 +86,6 @@
             return group;
         }
 
-        // --- INPUT & PHYSICS ---
         let move = { f: false, b: false, l: false, r: false, sprint: false, crouch: false };
         const vel = new THREE.Vector3();
         const dir = new THREE.Vector3();
@@ -101,14 +98,14 @@
             if(e.code==='KeyW') move.f=true; if(e.code==='KeyS') move.b=true;
             if(e.code==='KeyA') move.l=true; if(e.code==='KeyD') move.r=true;
             if(e.code==='ShiftLeft') move.sprint = true;
-            if(e.code==='KeyC') move.crouch = true; // CHANGED TO C
+            if(e.code==='KeyC') move.crouch = true;
             if(e.code==='Space' && canJump && !move.crouch) { vel.y += 10; canJump = false; }
         };
         document.onkeyup = (e) => {
             if(e.code==='KeyW') move.f=false; if(e.code==='KeyS') move.b=false;
             if(e.code==='KeyA') move.l=false; if(e.code==='KeyD') move.r=false;
             if(e.code==='ShiftLeft') move.sprint = false;
-            if(e.code==='KeyC') move.crouch = false; // CHANGED TO C
+            if(e.code==='KeyC') move.crouch = false;
         };
 
         function fireWeapon() {
@@ -117,7 +114,6 @@
             setTimeout(() => { flash.intensity = 0; hand.position.z -= 0.05; }, 50);
         }
 
-        // --- P2P NETWORK ---
         const peer = new Peer();
         const players = {};
         peer.on('open', id => {
@@ -126,7 +122,8 @@
             if(urlJoin) setupConn(peer.connect(urlJoin));
         });
         document.getElementById('copy-link').onclick = () => {
-            navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?join=${peer.id}`);
+            const link = `${window.location.origin}${window.location.pathname}?join=${peer.id}`;
+            navigator.clipboard.writeText(link);
             alert("Link Copied!");
         };
         peer.on('connection', setupConn);
@@ -142,7 +139,6 @@
             setInterval(() => { if(c.open) c.send({ x: camera.position.x, y: camera.position.y, z: camera.position.z, ry: camera.rotation.y }); }, 16);
         }
 
-        // --- LOOP ---
         const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
@@ -154,7 +150,10 @@
                 dir.z = Number(move.f) - Number(move.b);
                 dir.x = Number(move.r) - Number(move.l);
                 dir.normalize();
-                let currentSpeed = move.crouch ? 50 : (move.sprint ? 240 : 110);
+
+                // SPRINT FORCE NOW 200 (WAS 240)
+                let currentSpeed = move.crouch ? 50 : (move.sprint ? 200 : 110);
+
                 if (move.f || move.b) vel.z -= dir.z * currentSpeed * delta;
                 if (move.l || move.r) vel.x -= dir.x * currentSpeed * delta;
                 controls.moveRight(-vel.x * delta);
