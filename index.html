@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOON FPS: v6.5 RPG-7 STYLE</title>
+    <title>TOON FPS: v6.6 GREEN ROCKET</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
         canvas { display: block; }
@@ -22,7 +22,7 @@
     <div id="crosshair"></div>
     <div id="health-container"><div id="health-bar"></div></div>
     <div id="gui">
-        <div style="font-weight: bold;">TOON FPS v6.5</div>
+        <div style="font-weight: bold;">TOON FPS v6.6</div>
         <div id="my-id" style="font-size: 10px; color: #666;">ID: Connecting...</div>
         <div id="status" style="font-size: 10px; color: #2ed573;">Waiting for players...</div>
         <button id="copy-link">SHARE INVITE</button>
@@ -72,39 +72,31 @@
         sun.position.set(10, 20, 10);
         scene.add(sun);
 
-        // --- NEW RPG-7 VIEW MODEL ---
+        // --- RPG-7 VIEW MODEL ---
         const rpgGroup = new THREE.Group();
-        
-        // Main metal tube
         const tubeMain = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.2, 12), toonMat(0x333333));
         tubeMain.rotation.x = Math.PI / 2;
-
-        // Wooden heat shield (center)
         const heatShield = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.45, 12), toonMat(0x8B4513));
         heatShield.rotation.x = Math.PI / 2;
         heatShield.position.z = 0.1;
-
-        // Rear flared exhaust
         const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.12, 0.2, 12), toonMat(0x333333));
         exhaust.rotation.x = Math.PI / 2;
         exhaust.position.z = 0.55;
-
-        // Grip and Trigger
         const grip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.2, 0.08), toonMat(0x222222));
         grip.position.set(0, -0.15, -0.1);
 
-        // The Toon Rocket (Head & Shaft)
+        // The Toon Rocket (Green)
         const loadedRocket = new THREE.Group();
-        const rHead = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 12), toonMat(0x2f3542));
+        const rHead = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 12), toonMat(0x4b6332)); // Earth-tone Green
         rHead.rotation.x = -Math.PI / 2;
         rHead.position.z = -0.65;
-        const rShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.4, 12), toonMat(0xff4757));
+        const rShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.4, 12), toonMat(0x6b8e23)); // Olive Drab Green
         rShaft.rotation.x = Math.PI / 2;
         rShaft.position.z = -0.45;
         loadedRocket.add(rHead, rShaft);
 
         rpgGroup.add(tubeMain, heatShield, exhaust, grip, loadedRocket);
-        rpgGroup.position.set(0.45, -0.45, -0.7); // Adjusted for better screen presence
+        rpgGroup.position.set(0.45, -0.45, -0.7);
         camera.add(rpgGroup);
 
         const flash = new THREE.PointLight(0xFFD700, 0, 5);
@@ -131,13 +123,11 @@
             isReloading = true;
             loadedRocket.visible = false;
             flash.intensity = 15;
-            
-            // Recoil
             rpgGroup.position.z += 0.25;
             rpgGroup.rotation.x -= 0.15;
 
-            // Spawn projectile
-            const rocket = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.4), toonMat(0xff4757));
+            // Green Rocket Projectile
+            const rocket = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.4), toonMat(0x6b8e23));
             rocket.position.copy(camera.position);
             rocket.quaternion.copy(camera.quaternion);
             const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
@@ -146,10 +136,8 @@
             projectiles.push(rocket);
             
             Object.values(connections).forEach(c => { if(c.open) c.send({ type: 'rpc_fire', x: rocket.position.x, y: rocket.position.y, z: rocket.position.z }); });
-
             setTimeout(() => { flash.intensity = 0; }, 50);
             
-            // Reload Animation
             setTimeout(() => {
                 const drop = setInterval(() => {
                     rpgGroup.position.y -= 0.06;
