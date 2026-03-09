@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOON FPS: RPG v6 FULL</title>
+    <title>TOON FPS: RESTORED v6.1</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
         canvas { display: block; }
@@ -23,7 +23,7 @@
     <div id="crosshair"></div>
     <div id="health-container"><div id="health-bar"></div></div>
     <div id="gui">
-        <div style="font-weight: bold;">TOON RPG v6 FULL</div>
+        <div style="font-weight: bold;">TOON FPS v6.1 (RESTORED)</div>
         <div id="my-id" style="font-size: 10px; color: #666;">Connecting...</div>
         <button id="copy-link">SHARE INVITE</button>
         <div style="font-size: 9px; margin-top: 5px; color: #999;">SHIFT: SPRINT | C: CROUCH | CLICK: RPG</div>
@@ -57,7 +57,7 @@
         const controls = new PointerLockControls(camera, document.body);
         const toonMat = (color) => new THREE.MeshToonMaterial({ color, side: THREE.DoubleSide });
 
-        // World & Environment
+        // World
         const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), toonMat(0x2ed573));
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
@@ -76,7 +76,6 @@
         sun.position.set(10, 20, 10);
         scene.add(sun);
 
-        // Weapon/Flash
         const hand = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), toonMat(0xffdbac));
         hand.position.set(0.4, -0.4, -0.6);
         camera.add(hand);
@@ -84,16 +83,23 @@
         camera.add(flash);
         scene.add(camera);
 
-        // State Variables
+        function createPlayerModel(color) {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 1, 4, 8), toonMat(color));
+            const visor = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.25, 0.2), toonMat(0x333333));
+            visor.position.set(0, 0.45, -0.3);
+            group.add(body, visor);
+            return group;
+        }
+
+        // State
         let health = 100, isDead = false, vel = new THREE.Vector3(), bobTimer = 0, currentEyeHeight = 1.6;
         let move = { f: false, b: false, l: false, r: false, sprint: false, crouch: false };
         let projectiles = [], explosions = [];
         const speedLinesEl = document.getElementById('speed-lines');
 
-        // RPG Logic
         function fireRPG() {
             if(isDead || !controls.isLocked) return;
-            // Muzzle Flash Effect
             flash.intensity = 15;
             hand.position.z += 0.1;
             setTimeout(() => { flash.intensity = 0; hand.position.z -= 0.1; }, 50);
@@ -120,14 +126,12 @@
             scene.add(group);
             explosions.push({ mesh: group, time: 0 });
 
-            // Rocket Jump Physics (No Damage to Self)
             const dist = camera.position.distanceTo(pos);
             if(dist < 5) {
                 const power = (5 - dist) * 12;
                 vel.y += power; 
             }
 
-            // Damage to Players
             Object.keys(players).forEach(id => {
                 if(players[id].mesh.position.distanceTo(pos) < 5) {
                     connections[id].send({ type: 'hit', damage: 35 });
@@ -166,11 +170,9 @@
             c.on('data', d => {
                 if(d.type === 'hit') { health -= d.damage; if(health<=0 && !isDead) die(); updateUI(); }
                 if(!players[c.peer]) {
-                    const group = new THREE.Group();
-                    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 1, 4, 8), toonMat(Math.random()*0xffffff));
-                    group.add(body);
-                    players[c.peer] = { mesh: group, target: new THREE.Vector3() };
-                    scene.add(group);
+                    const model = createPlayerModel(Math.random()*0xffffff);
+                    players[c.peer] = { mesh: model, target: new THREE.Vector3() };
+                    scene.add(model);
                 }
                 players[c.peer].target.set(d.x, d.y-1.6, d.z);
             });
@@ -194,13 +196,19 @@
         }
         function updateUI() { document.getElementById('health-bar').style.width = health + "%"; }
 
+        // Window Resize Logic
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
         // Game Loop
         const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
             const delta = Math.min(clock.getDelta(), 0.1);
 
-            // Projectile Physics
             projectiles.forEach((p, i) => {
                 p.position.add(p.userData.velocity);
                 p.userData.life--;
@@ -210,7 +218,6 @@
                 }
             });
 
-            // Toon Explosion FX
             explosions.forEach((ex, i) => {
                 ex.time += delta;
                 ex.mesh.scale.multiplyScalar(1.08);
@@ -218,12 +225,10 @@
             });
 
             if (controls.isLocked && !isDead) {
-                // Gravity & Movement
                 vel.y -= 30 * delta; 
                 let speed = move.crouch ? 50 : (move.sprint ? 200 : 110);
                 const isMoving = move.f || move.b || move.l || move.r;
 
-                // Dynamic FOV & Speed Lines
                 const targetFOV = (move.sprint && isMoving) ? 90 : 75;
                 camera.fov = THREE.MathUtils.lerp(camera.fov, targetFOV, 8 * delta);
                 camera.updateProjectionMatrix();
@@ -233,7 +238,6 @@
                 controls.moveRight(dir.x * speed * delta * 0.1);
                 controls.moveForward(dir.z * speed * delta * 0.1);
 
-                // Crouching & Bobbing
                 const targetHeight = move.crouch ? 0.8 : 1.6;
                 currentEyeHeight = THREE.MathUtils.lerp(currentEyeHeight, targetHeight, 10 * delta);
                 camera.position.y += vel.y * delta;
