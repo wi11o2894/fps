@@ -3,17 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Toon FPS: Refined Sprint</title>
+    <title>Toon FPS: Speed FX Edition</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
         canvas { display: block; }
         #gui { position: absolute; top: 20px; left: 20px; z-index: 10; background: white; border: 4px solid black; padding: 15px; box-shadow: 8px 8px 0px rgba(0,0,0,0.1); }
         #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; border: 2px solid black; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
         button { background: #ff4757; color: white; border: 2px solid black; padding: 5px; cursor: pointer; width: 100%; margin-top: 10px; font-weight: bold; }
+        
+        /* Speed Lines Overlay */
+        #speed-lines {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 5; opacity: 0;
+            background: radial-gradient(circle, transparent 30%, rgba(255,255,255,0.4) 100%);
+            mask-image: repeating-conic-gradient(from 0deg, black 0deg 1deg, transparent 1deg 15deg);
+            -webkit-mask-image: repeating-conic-gradient(from 0deg, black 0deg 1deg, transparent 1deg 15deg);
+            transition: opacity 0.2s;
+        }
     </style>
 </head>
 <body>
 
+    <div id="speed-lines"></div>
     <div id="crosshair"></div>
     <div id="gui">
         <div style="font-weight: bold;">TOON LOBBY</div>
@@ -92,6 +103,7 @@
         let canJump = false;
         let bobTimer = 0;
         let currentEyeHeight = 1.6;
+        const speedLinesEl = document.getElementById('speed-lines');
 
         document.onkeydown = (e) => {
             if (['KeyW','KeyS','KeyA','KeyD','KeyC','Space','ShiftLeft'].includes(e.code)) e.preventDefault();
@@ -151,8 +163,14 @@
                 dir.x = Number(move.r) - Number(move.l);
                 dir.normalize();
 
-                // SPRINT FORCE NOW 200 (WAS 240)
+                const isActuallyMoving = (move.f || move.b || move.l || move.r);
                 let currentSpeed = move.crouch ? 50 : (move.sprint ? 200 : 110);
+                
+                // FOV & Speed Lines Logic
+                const targetFOV = (move.sprint && isActuallyMoving) ? 90 : 75;
+                camera.fov = THREE.MathUtils.lerp(camera.fov, targetFOV, 8 * delta);
+                camera.updateProjectionMatrix();
+                speedLinesEl.style.opacity = (move.sprint && isActuallyMoving) ? "1" : "0";
 
                 if (move.f || move.b) vel.z -= dir.z * currentSpeed * delta;
                 if (move.l || move.r) vel.x -= dir.x * currentSpeed * delta;
@@ -164,7 +182,7 @@
                 controls.getObject().position.y += (vel.y * delta);
                 if (controls.getObject().position.y <= currentEyeHeight) {
                     vel.y = 0; controls.getObject().position.y = currentEyeHeight; canJump = true;
-                    if (move.f || move.b || move.l || move.r) {
+                    if (isActuallyMoving) {
                         let bFreq = move.crouch ? 8 : (move.sprint ? 22 : 14);
                         let bAmt = move.crouch ? 0.01 : (move.sprint ? 0.045 : 0.025);
                         bobTimer += delta * bFreq;
