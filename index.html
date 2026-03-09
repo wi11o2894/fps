@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Toon FPS: Speed FX</title>
+    <title>TOON FPS: COMBAT v4</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
         canvas { display: block; }
@@ -11,13 +11,17 @@
         #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; border: 2px solid black; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
         button { background: #ff4757; color: white; border: 2px solid black; padding: 5px; cursor: pointer; width: 100%; margin-top: 10px; font-weight: bold; }
         
-        /* Speed Lines Overlay - This is the new visual part */
+        /* HEALTH UI */
+        #health-container { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 300px; height: 25px; border: 4px solid black; background: #333; z-index: 10; }
+        #health-bar { width: 100%; height: 100%; background: #2ed573; transition: width 0.2s, background 0.2s; }
+
+        /* SPEED LINES */
         #speed-lines {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none; z-index: 5; opacity: 0;
-            background: radial-gradient(circle, transparent 30%, rgba(255,255,255,0.5) 100%);
-            mask-image: repeating-conic-gradient(from 0deg, black 0deg 1deg, transparent 1deg 15deg);
-            -webkit-mask-image: repeating-conic-gradient(from 0deg, black 0deg 1deg, transparent 1deg 15deg);
+            background: radial-gradient(circle, transparent 25%, rgba(255,255,255,0.6) 100%);
+            mask-image: repeating-conic-gradient(from 0deg, black 0deg 2deg, transparent 2deg 15deg);
+            -webkit-mask-image: repeating-conic-gradient(from 0deg, black 0deg 2deg, transparent 2deg 15deg);
             transition: opacity 0.15s;
         }
     </style>
@@ -26,8 +30,10 @@
 
     <div id="speed-lines"></div>
     <div id="crosshair"></div>
+    <div id="health-container"><div id="health-bar"></div></div>
+    
     <div id="gui">
-        <div style="font-weight: bold;">TOON LOBBY v2 (FX)</div>
+        <div style="font-weight: bold;">TOON COMBAT v4</div>
         <div id="my-id" style="font-size: 10px; color: #666;">Connecting...</div>
         <button id="copy-link">SHARE INVITE</button>
         <div style="font-size: 9px; margin-top: 5px; color: #999;">SHIFT: SPRINT | C: CROUCH</div>
@@ -59,10 +65,20 @@
 
         const effect = new OutlineEffect(renderer, { defaultThickness: 0.006 });
         const controls = new PointerLockControls(camera, document.body);
-        document.addEventListener('click', () => { if(!controls.isLocked) controls.lock(); else fireWeapon(); });
+        const raycaster = new THREE.Raycaster();
+
+        // --- HEALTH SYSTEM ---
+        let health = 100;
+        const healthBar = document.getElementById('health-bar');
+
+        document.addEventListener('click', () => { 
+            if(!controls.isLocked) controls.lock(); 
+            else fireWeapon(); 
+        });
 
         const toonMat = (color) => new THREE.MeshToonMaterial({ color, side: THREE.DoubleSide });
 
+        // World
         const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), toonMat(0x2ed573));
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
@@ -81,6 +97,7 @@
         sun.position.set(10, 20, 10);
         scene.add(sun);
 
+        // Player Arm/Gun
         const hand = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), toonMat(0xffdbac));
         hand.position.set(0.4, -0.4, -0.6);
         camera.add(hand);
@@ -97,6 +114,7 @@
             return group;
         }
 
+        // --- INPUT & PHYSICS ---
         let move = { f: false, b: false, l: false, r: false, sprint: false, crouch: false };
         const vel = new THREE.Vector3();
         const dir = new THREE.Vector3();
@@ -120,37 +138,84 @@
             if(e.code==='KeyC') move.crouch = false;
         };
 
+        function takeDamage(amount) {
+            health -= amount;
+            if (health <= 0) {
+                health = 100;
+                controls.getObject().position.set(0, 1.6, 0); // Respawn
+            }
+            updateHealthUI();
+        }
+
+        function updateHealthUI() {
+            healthBar.style.width = health + "%";
+            if (health < 30) healthBar.style.background = "#ff4757";
+            else if (health < 60) healthBar.style.background = "#ffa502";
+            else healthBar.style.background = "#2ed573";
+        }
+
         function fireWeapon() {
             flash.intensity = 10;
             hand.position.z += 0.05;
             setTimeout(() => { flash.intensity = 0; hand.position.z -= 0.05; }, 50);
+
+            // HIT DETECTION - Raycast from center of screen
+            raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
+            const playerMeshes = Object.values(players).map(p => p.mesh);
+            const intersects = raycaster.intersectObjects(playerMeshes, true);
+
+            if (intersects.length > 0) {
+                let hitObject = intersects[0].object;
+                // Find the parent group that has the PeerId
+                while(hitObject.parent && !hitObject.peerId) hitObject = hitObject.parent;
+                
+                if (hitObject.peerId && connections[hitObject.peerId]) {
+                    connections[hitObject.peerId].send({ type: 'hit', damage: 10 });
+                }
+            }
         }
 
+        // --- NETWORKING ---
         const peer = new Peer();
         const players = {};
+        const connections = {};
+
         peer.on('open', id => {
             document.getElementById('my-id').innerText = id;
             const urlJoin = new URLSearchParams(window.location.search).get('join');
             if(urlJoin) setupConn(peer.connect(urlJoin));
         });
+
         document.getElementById('copy-link').onclick = () => {
             const link = `${window.location.origin}${window.location.pathname}?join=${peer.id}`;
             navigator.clipboard.writeText(link);
-            alert("Link Copied!");
+            alert("Invite Copied!");
         };
+
         peer.on('connection', setupConn);
+
         function setupConn(c) {
+            connections[c.peer] = c;
             c.on('data', d => {
-                if(!players[c.peer]) {
-                    players[c.peer] = { mesh: createPlayerModel(Math.random()*0xffffff), target: new THREE.Vector3(), tRy: 0 };
-                    scene.add(players[c.peer].mesh);
+                if (d.type === 'hit') {
+                    takeDamage(d.damage);
+                } else {
+                    if(!players[c.peer]) {
+                        const m = createPlayerModel(Math.random()*0xffffff);
+                        m.peerId = c.peer; // Tag the mesh for hit detection
+                        players[c.peer] = { mesh: m, target: new THREE.Vector3(), tRy: 0 };
+                        scene.add(m);
+                    }
+                    players[c.peer].target.set(d.x, d.y-1.6, d.z);
+                    players[c.peer].tRy = d.ry;
                 }
-                players[c.peer].target.set(d.x, d.y-1.6, d.z);
-                players[c.peer].tRy = d.ry;
             });
-            setInterval(() => { if(c.open) c.send({ x: camera.position.x, y: camera.position.y, z: camera.position.z, ry: camera.rotation.y }); }, 16);
+            setInterval(() => { 
+                if(c.open) c.send({ x: camera.position.x, y: camera.position.y, z: camera.position.z, ry: camera.rotation.y }); 
+            }, 16);
         }
 
+        // --- LOOP ---
         const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
@@ -163,14 +228,14 @@
                 dir.x = Number(move.r) - Number(move.l);
                 dir.normalize();
 
-                const isActuallyMoving = (move.f || move.b || move.l || move.r);
+                const isMoving = (move.f || move.b || move.l || move.r);
                 let currentSpeed = move.crouch ? 50 : (move.sprint ? 200 : 110);
                 
-                // --- FOV & Speed Lines Logic ---
-                const targetFOV = (move.sprint && isActuallyMoving) ? 90 : 75;
+                // FOV & Speed Lines Logic
+                const targetFOV = (move.sprint && isMoving) ? 90 : 75;
                 camera.fov = THREE.MathUtils.lerp(camera.fov, targetFOV, 8 * delta);
                 camera.updateProjectionMatrix();
-                speedLinesEl.style.opacity = (move.sprint && isActuallyMoving) ? "1" : "0";
+                speedLinesEl.style.opacity = (move.sprint && isMoving) ? "1" : "0";
 
                 if (move.f || move.b) vel.z -= dir.z * currentSpeed * delta;
                 if (move.l || move.r) vel.x -= dir.x * currentSpeed * delta;
@@ -182,7 +247,7 @@
                 controls.getObject().position.y += (vel.y * delta);
                 if (controls.getObject().position.y <= currentEyeHeight) {
                     vel.y = 0; controls.getObject().position.y = currentEyeHeight; canJump = true;
-                    if (isActuallyMoving) {
+                    if (isMoving) {
                         let bFreq = move.crouch ? 8 : (move.sprint ? 22 : 14);
                         let bAmt = move.crouch ? 0.01 : (move.sprint ? 0.045 : 0.025);
                         bobTimer += delta * bFreq;
