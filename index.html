@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Toon FPS: Speed FX Edition</title>
+    <title>Toon FPS: Speed FX</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
         canvas { display: block; }
@@ -11,14 +11,14 @@
         #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; border: 2px solid black; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
         button { background: #ff4757; color: white; border: 2px solid black; padding: 5px; cursor: pointer; width: 100%; margin-top: 10px; font-weight: bold; }
         
-        /* Speed Lines Overlay */
+        /* Speed Lines Overlay - This is the new visual part */
         #speed-lines {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none; z-index: 5; opacity: 0;
-            background: radial-gradient(circle, transparent 30%, rgba(255,255,255,0.4) 100%);
+            background: radial-gradient(circle, transparent 30%, rgba(255,255,255,0.5) 100%);
             mask-image: repeating-conic-gradient(from 0deg, black 0deg 1deg, transparent 1deg 15deg);
             -webkit-mask-image: repeating-conic-gradient(from 0deg, black 0deg 1deg, transparent 1deg 15deg);
-            transition: opacity 0.2s;
+            transition: opacity 0.15s;
         }
     </style>
 </head>
@@ -27,7 +27,7 @@
     <div id="speed-lines"></div>
     <div id="crosshair"></div>
     <div id="gui">
-        <div style="font-weight: bold;">TOON LOBBY</div>
+        <div style="font-weight: bold;">TOON LOBBY v2 (FX)</div>
         <div id="my-id" style="font-size: 10px; color: #666;">Connecting...</div>
         <button id="copy-link">SHARE INVITE</button>
         <div style="font-size: 9px; margin-top: 5px; color: #999;">SHIFT: SPRINT | C: CROUCH</div>
@@ -166,7 +166,7 @@
                 const isActuallyMoving = (move.f || move.b || move.l || move.r);
                 let currentSpeed = move.crouch ? 50 : (move.sprint ? 200 : 110);
                 
-                // FOV & Speed Lines Logic
+                // --- FOV & Speed Lines Logic ---
                 const targetFOV = (move.sprint && isActuallyMoving) ? 90 : 75;
                 camera.fov = THREE.MathUtils.lerp(camera.fov, targetFOV, 8 * delta);
                 camera.updateProjectionMatrix();
