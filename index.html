@@ -3,53 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOON FPS: DEATH SCREEN v5</title>
+    <title>TOON FPS: RPG v6 FULL</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
         canvas { display: block; }
         #gui { position: absolute; top: 20px; left: 20px; z-index: 10; background: white; border: 4px solid black; padding: 15px; box-shadow: 8px 8px 0px rgba(0,0,0,0.1); }
         #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; border: 2px solid black; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
-        button { background: #ff4757; color: white; border: 2px solid black; padding: 5px; cursor: pointer; width: 100%; margin-top: 10px; font-weight: bold; }
-        
-        /* HEALTH UI */
         #health-container { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 300px; height: 25px; border: 4px solid black; background: #333; z-index: 10; }
-        #health-bar { width: 100%; height: 100%; background: #2ed573; transition: width 0.2s, background 0.2s; }
-
-        /* DEATH SCREEN */
-        #death-screen { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            background: rgba(0,0,0,0.8); display: none; flex-direction: column; 
-            justify-content: center; align-items: center; z-index: 1000; color: white;
-        }
-        #death-screen h1 { font-size: 48px; margin-bottom: 10px; color: #ff4757; }
-
-        /* SPEED LINES */
-        #speed-lines {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; z-index: 5; opacity: 0;
-            background: radial-gradient(circle, transparent 25%, rgba(255,255,255,0.6) 100%);
-            mask-image: repeating-conic-gradient(from 0deg, black 0deg 2deg, transparent 2deg 15deg);
-            -webkit-mask-image: repeating-conic-gradient(from 0deg, black 0deg 2deg, transparent 2deg 15deg);
-            transition: opacity 0.15s;
-        }
+        #health-bar { width: 100%; height: 100%; background: #2ed573; transition: width 0.2s; }
+        #death-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; color: white; }
+        #death-screen h1 { font-size: 48px; color: #ff4757; }
+        #speed-lines { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; opacity: 0; background: radial-gradient(circle, transparent 25%, rgba(255,255,255,0.6) 100%); mask-image: repeating-conic-gradient(from 0deg, black 0deg 2deg, transparent 2deg 15deg); -webkit-mask-image: repeating-conic-gradient(from 0deg, black 0deg 2deg, transparent 2deg 15deg); transition: opacity 0.15s; }
+        button { background: #ff4757; color: white; border: 2px solid black; padding: 5px; cursor: pointer; width: 100%; margin-top: 10px; font-weight: bold; }
     </style>
 </head>
 <body>
-
-    <div id="death-screen">
-        <h1>DEFEATED</h1>
-        <p>RESPAWNING IN <span id="timer">3</span>...</p>
-    </div>
-
+    <div id="death-screen"><h1>DEFEATED</h1><p>RESPAWNING IN <span id="timer">3</span>...</p></div>
     <div id="speed-lines"></div>
     <div id="crosshair"></div>
     <div id="health-container"><div id="health-bar"></div></div>
-    
     <div id="gui">
-        <div style="font-weight: bold;">TOON FPS v5</div>
+        <div style="font-weight: bold;">TOON RPG v6 FULL</div>
         <div id="my-id" style="font-size: 10px; color: #666;">Connecting...</div>
         <button id="copy-link">SHARE INVITE</button>
-        <div style="font-size: 9px; margin-top: 5px; color: #999;">SHIFT: SPRINT | C: CROUCH</div>
+        <div style="font-size: 9px; margin-top: 5px; color: #999;">SHIFT: SPRINT | C: CROUCH | CLICK: RPG</div>
     </div>
 
     <script type="importmap">
@@ -78,22 +55,9 @@
 
         const effect = new OutlineEffect(renderer, { defaultThickness: 0.006 });
         const controls = new PointerLockControls(camera, document.body);
-        const raycaster = new THREE.Raycaster();
-
-        let health = 100;
-        let isDead = false;
-        const healthBar = document.getElementById('health-bar');
-        const deathScreen = document.getElementById('death-screen');
-        const timerEl = document.getElementById('timer');
-
-        document.addEventListener('click', () => { 
-            if(isDead) return;
-            if(!controls.isLocked) controls.lock(); 
-            else fireWeapon(); 
-        });
-
         const toonMat = (color) => new THREE.MeshToonMaterial({ color, side: THREE.DoubleSide });
 
+        // World & Environment
         const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), toonMat(0x2ed573));
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
@@ -112,6 +76,7 @@
         sun.position.set(10, 20, 10);
         scene.add(sun);
 
+        // Weapon/Flash
         const hand = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), toonMat(0xffdbac));
         hand.position.set(0.4, -0.4, -0.6);
         camera.add(hand);
@@ -119,23 +84,59 @@
         camera.add(flash);
         scene.add(camera);
 
-        function createPlayerModel(color) {
-            const group = new THREE.Group();
-            const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 1, 4, 8), toonMat(color));
-            const visor = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.25, 0.2), toonMat(0x333333));
-            visor.position.set(0, 0.45, -0.3);
-            group.add(body, visor);
-            return group;
-        }
-
+        // State Variables
+        let health = 100, isDead = false, vel = new THREE.Vector3(), bobTimer = 0, currentEyeHeight = 1.6;
         let move = { f: false, b: false, l: false, r: false, sprint: false, crouch: false };
-        const vel = new THREE.Vector3();
-        const dir = new THREE.Vector3();
-        let canJump = false;
-        let bobTimer = 0;
-        let currentEyeHeight = 1.6;
+        let projectiles = [], explosions = [];
         const speedLinesEl = document.getElementById('speed-lines');
 
+        // RPG Logic
+        function fireRPG() {
+            if(isDead || !controls.isLocked) return;
+            // Muzzle Flash Effect
+            flash.intensity = 15;
+            hand.position.z += 0.1;
+            setTimeout(() => { flash.intensity = 0; hand.position.z -= 0.1; }, 50);
+
+            const rocket = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.4), toonMat(0xff4757));
+            rocket.position.copy(camera.position);
+            rocket.quaternion.copy(camera.quaternion);
+            const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            rocket.userData = { velocity: direction.multiplyScalar(0.7), life: 120 };
+            scene.add(rocket);
+            projectiles.push(rocket);
+            
+            Object.values(connections).forEach(c => c.send({ type: 'rpc_fire', pos: rocket.position, quat: rocket.quaternion }));
+        }
+
+        function createExplosion(pos) {
+            const group = new THREE.Group();
+            group.position.copy(pos);
+            for(let i=0; i<6; i++){
+                const bubble = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), toonMat(i % 2 === 0 ? 0xffa502 : 0xffffff));
+                bubble.position.set(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5);
+                group.add(bubble);
+            }
+            scene.add(group);
+            explosions.push({ mesh: group, time: 0 });
+
+            // Rocket Jump Physics (No Damage to Self)
+            const dist = camera.position.distanceTo(pos);
+            if(dist < 5) {
+                const power = (5 - dist) * 12;
+                vel.y += power; 
+            }
+
+            // Damage to Players
+            Object.keys(players).forEach(id => {
+                if(players[id].mesh.position.distanceTo(pos) < 5) {
+                    connections[id].send({ type: 'hit', damage: 35 });
+                }
+            });
+        }
+
+        // Controls
+        document.addEventListener('click', () => { if(!controls.isLocked) controls.lock(); else fireRPG(); });
         document.onkeydown = (e) => {
             if(isDead) return;
             if (['KeyW','KeyS','KeyA','KeyD','KeyC','Space','ShiftLeft'].includes(e.code)) e.preventDefault();
@@ -143,7 +144,7 @@
             if(e.code==='KeyA') move.l=true; if(e.code==='KeyD') move.r=true;
             if(e.code==='ShiftLeft') move.sprint = true;
             if(e.code==='KeyC') move.crouch = true;
-            if(e.code==='Space' && canJump && !move.crouch) { vel.y += 10; canJump = false; }
+            if(e.code==='Space' && Math.abs(vel.y) < 0.1 && !move.crouch) { vel.y += 10; }
         };
         document.onkeyup = (e) => {
             if(e.code==='KeyW') move.f=false; if(e.code==='KeyS') move.b=false;
@@ -152,152 +153,106 @@
             if(e.code==='KeyC') move.crouch = false;
         };
 
-        function takeDamage(amount) {
-            if(isDead) return;
-            health -= amount;
-            if (health <= 0) die();
-            updateHealthUI();
-        }
-
-        function die() {
-            isDead = true;
-            health = 0;
-            deathScreen.style.display = 'flex';
-            controls.unlock();
-            
-            let count = 3;
-            timerEl.innerText = count;
-            const interval = setInterval(() => {
-                count--;
-                timerEl.innerText = count;
-                if(count <= 0) {
-                    clearInterval(interval);
-                    respawn();
-                }
-            }, 1000);
-        }
-
-        function respawn() {
-            isDead = false;
-            health = 100;
-            updateHealthUI();
-            deathScreen.style.display = 'none';
-            controls.getObject().position.set(0, 1.6, 0);
-            controls.lock();
-        }
-
-        function updateHealthUI() {
-            healthBar.style.width = health + "%";
-            if (health < 30) healthBar.style.background = "#ff4757";
-            else if (health < 60) healthBar.style.background = "#ffa502";
-            else healthBar.style.background = "#2ed573";
-        }
-
-        function fireWeapon() {
-            if(isDead) return;
-            flash.intensity = 10;
-            hand.position.z += 0.05;
-            setTimeout(() => { flash.intensity = 0; hand.position.z -= 0.05; }, 50);
-
-            raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
-            const playerMeshes = Object.values(players).map(p => p.mesh);
-            const intersects = raycaster.intersectObjects(playerMeshes, true);
-
-            if (intersects.length > 0) {
-                let hitObject = intersects[0].object;
-                while(hitObject.parent && !hitObject.peerId) hitObject = hitObject.parent;
-                if (hitObject.peerId && connections[hitObject.peerId]) {
-                    connections[hitObject.peerId].send({ type: 'hit', damage: 10 });
-                }
-            }
-        }
-
-        const peer = new Peer();
-        const players = {};
-        const connections = {};
-
-        peer.on('open', id => {
-            document.getElementById('my-id').innerText = id;
-            const urlJoin = new URLSearchParams(window.location.search).get('join');
-            if(urlJoin) setupConn(peer.connect(urlJoin));
-        });
-
+        // Networking
+        const peer = new Peer(), players = {}, connections = {};
+        peer.on('open', id => document.getElementById('my-id').innerText = id);
         document.getElementById('copy-link').onclick = () => {
             const link = `${window.location.origin}${window.location.pathname}?join=${peer.id}`;
-            navigator.clipboard.writeText(link);
-            alert("Invite Copied!");
+            navigator.clipboard.writeText(link); alert("Invite Copied!");
         };
-
         peer.on('connection', setupConn);
-
         function setupConn(c) {
             connections[c.peer] = c;
             c.on('data', d => {
-                if (d.type === 'hit') takeDamage(d.damage);
-                else {
-                    if(!players[c.peer]) {
-                        const m = createPlayerModel(Math.random()*0xffffff);
-                        m.peerId = c.peer;
-                        players[c.peer] = { mesh: m, target: new THREE.Vector3(), tRy: 0 };
-                        scene.add(m);
-                    }
-                    players[c.peer].target.set(d.x, d.y-1.6, d.z);
-                    players[c.peer].tRy = d.ry;
+                if(d.type === 'hit') { health -= d.damage; if(health<=0 && !isDead) die(); updateUI(); }
+                if(!players[c.peer]) {
+                    const group = new THREE.Group();
+                    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 1, 4, 8), toonMat(Math.random()*0xffffff));
+                    group.add(body);
+                    players[c.peer] = { mesh: group, target: new THREE.Vector3() };
+                    scene.add(group);
                 }
+                players[c.peer].target.set(d.x, d.y-1.6, d.z);
             });
-            setInterval(() => { if(c.open) c.send({ x: camera.position.x, y: camera.position.y, z: camera.position.z, ry: camera.rotation.y }); }, 16);
+            setInterval(() => { if(c.open) c.send({ x: camera.position.x, y: camera.position.y, z: camera.position.z }); }, 16);
         }
 
+        function die() {
+            isDead = true; health = 0; updateUI();
+            document.getElementById('death-screen').style.display = 'flex';
+            controls.unlock();
+            let count = 3;
+            const timer = setInterval(() => {
+                count--; document.getElementById('timer').innerText = count;
+                if(count<=0) { clearInterval(timer); respawn(); }
+            }, 1000);
+        }
+        function respawn() {
+            isDead = false; health = 100; updateUI();
+            document.getElementById('death-screen').style.display = 'none';
+            camera.position.set(0, 1.6, 0); controls.lock();
+        }
+        function updateUI() { document.getElementById('health-bar').style.width = health + "%"; }
+
+        // Game Loop
         const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
             const delta = Math.min(clock.getDelta(), 0.1);
-            
-            if (controls.isLocked && !isDead) {
-                vel.y -= 35 * delta;
-                vel.x -= vel.x * 15.0 * delta;
-                vel.z -= vel.z * 15.0 * delta;
-                dir.z = Number(move.f) - Number(move.b);
-                dir.x = Number(move.r) - Number(move.l);
-                dir.normalize();
 
-                const isMoving = (move.f || move.b || move.l || move.r);
-                let currentSpeed = move.crouch ? 50 : (move.sprint ? 200 : 110);
-                
+            // Projectile Physics
+            projectiles.forEach((p, i) => {
+                p.position.add(p.userData.velocity);
+                p.userData.life--;
+                if(p.position.y < 0.1 || p.userData.life <= 0) {
+                    createExplosion(p.position);
+                    scene.remove(p); projectiles.splice(i, 1);
+                }
+            });
+
+            // Toon Explosion FX
+            explosions.forEach((ex, i) => {
+                ex.time += delta;
+                ex.mesh.scale.multiplyScalar(1.08);
+                if(ex.time > 0.4) { scene.remove(ex.mesh); explosions.splice(i, 1); }
+            });
+
+            if (controls.isLocked && !isDead) {
+                // Gravity & Movement
+                vel.y -= 30 * delta; 
+                let speed = move.crouch ? 50 : (move.sprint ? 200 : 110);
+                const isMoving = move.f || move.b || move.l || move.r;
+
+                // Dynamic FOV & Speed Lines
                 const targetFOV = (move.sprint && isMoving) ? 90 : 75;
                 camera.fov = THREE.MathUtils.lerp(camera.fov, targetFOV, 8 * delta);
                 camera.updateProjectionMatrix();
                 speedLinesEl.style.opacity = (move.sprint && isMoving) ? "1" : "0";
 
-                if (move.f || move.b) vel.z -= dir.z * currentSpeed * delta;
-                if (move.l || move.r) vel.x -= dir.x * currentSpeed * delta;
-                controls.moveRight(-vel.x * delta);
-                controls.moveForward(-vel.z * delta);
-                
+                const dir = new THREE.Vector3(Number(move.r)-Number(move.l), 0, Number(move.f)-Number(move.b)).normalize();
+                controls.moveRight(dir.x * speed * delta * 0.1);
+                controls.moveForward(dir.z * speed * delta * 0.1);
+
+                // Crouching & Bobbing
                 const targetHeight = move.crouch ? 0.8 : 1.6;
                 currentEyeHeight = THREE.MathUtils.lerp(currentEyeHeight, targetHeight, 10 * delta);
-                controls.getObject().position.y += (vel.y * delta);
-                if (controls.getObject().position.y <= currentEyeHeight) {
-                    vel.y = 0; controls.getObject().position.y = currentEyeHeight; canJump = true;
+                camera.position.y += vel.y * delta;
+
+                if (camera.position.y <= currentEyeHeight) {
+                    camera.position.y = currentEyeHeight; vel.y = 0;
                     if (isMoving) {
                         let bFreq = move.crouch ? 8 : (move.sprint ? 22 : 14);
                         let bAmt = move.crouch ? 0.01 : (move.sprint ? 0.045 : 0.025);
                         bobTimer += delta * bFreq;
-                        controls.getObject().position.y += Math.sin(bobTimer) * bAmt;
+                        camera.position.y += Math.sin(bobTimer) * bAmt;
                     }
                 }
             }
-            for (let id in players) {
-                players[id].mesh.position.lerp(players[id].target, 0.2);
-                players[id].mesh.rotation.y = players[id].tRy;
-            }
+
+            for(let id in players) players[id].mesh.position.lerp(players[id].target, 0.2);
             effect.render(scene, camera);
         }
         animate();
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
     </script>
 </body>
 </html>
