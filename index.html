@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOON FPS: v7.5 FULL FEATURES</title>
+    <title>TOON FPS: v7.7 DESTRUCTIBLE WORLD</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87CEEB; font-family: 'Courier New', monospace; }
         canvas { display: block; }
@@ -22,7 +22,7 @@
     <div id="crosshair"></div>
     <div id="health-container"><div id="health-bar"></div></div>
     <div id="gui">
-        <div style="font-weight: bold;">TOON FPS v7.5</div>
+        <div style="font-weight: bold;">TOON FPS v7.7</div>
         <div id="my-id" style="font-size: 10px; color: #666;">ID: Connecting...</div>
         <div id="status" style="font-size: 10px; color: #2ed573;">Waiting for players...</div>
         <button id="copy-link">SHARE INVITE</button>
@@ -55,7 +55,7 @@
         const controls = new PointerLockControls(camera, document.body);
         const toonMat = (color) => new THREE.MeshToonMaterial({ color });
 
-        // --- RESTORED GRASS ---
+        // --- WORLD, GRASS & DESTRUCTIBLES ---
         const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), toonMat(0x2ed573));
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
@@ -65,12 +65,23 @@
             blade.rotation.y = Math.random()*Math.PI;
             scene.add(blade);
         }
+
+        const crates = [];
+        const crateMat = toonMat(0xcd853f);
+        function spawnCrate(x, z) {
+            const crate = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), crateMat);
+            crate.position.set(x, 0.6, z);
+            scene.add(crate);
+            crates.push(crate);
+        }
+        for(let i=0; i<15; i++) spawnCrate(Math.random()*40-20, Math.random()*40-20);
+
         scene.add(new THREE.AmbientLight(0xffffff, 1.2));
         const sun = new THREE.DirectionalLight(0xffffff, 0.8);
         sun.position.set(10, 20, 10);
         scene.add(sun);
 
-        // --- RPG-7 MODEL ---
+        // --- RPG & PLAYER MODELS (AS BEFORE) ---
         function createRPGModel() {
             const group = new THREE.Group();
             const mainTube = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0), toonMat(0x222222));
@@ -94,17 +105,22 @@
         camera.add(myRPG.group);
         scene.add(camera);
 
-        // --- TABS MODEL ---
         function createPlayerModel(color) {
             const group = new THREE.Group();
             const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.25, 0.5, 4, 8), toonMat(color));
             torso.position.y = 1.05;
             const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), toonMat(0xeeeeee));
             head.position.y = 1.55;
-            const visor = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.1, 4, 8), toonMat(0x111111));
-            visor.rotation.z = Math.PI/2; visor.position.set(0, 0.05, -0.18);
-            head.add(visor);
-
+            const createEye = (side) => {
+                const eyeGroup = new THREE.Group();
+                const white = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), toonMat(0xffffff));
+                const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), toonMat(0x000000));
+                pupil.position.z = 0.04; eyeGroup.add(white, pupil);
+                eyeGroup.position.set(side * 0.1, 0.05, -0.16);
+                return { group: eyeGroup, pupil };
+            };
+            const leftEye = createEye(-1); const rightEye = createEye(1);
+            head.add(leftEye.group, rightEye.group);
             const createLimb = (isLeg) => {
                 const root = new THREE.Group();
                 const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.25, 4, 8), toonMat(isLeg ? 0x222222 : color));
@@ -116,22 +132,19 @@
                 lowerGroup.add(lower); root.add(upper, lowerGroup);
                 return { root, lower: lowerGroup };
             };
-
             const legL = createLimb(true); legL.root.position.set(-0.15, 0.8, 0);
             const legR = createLimb(true); legR.root.position.set(0.15, 0.8, 0);
             const armL = createLimb(false); armL.root.position.set(-0.35, 1.3, 0);
             const armR = createLimb(false); armR.root.position.set(0.35, 1.3, 0);
-            
             group.add(torso, head, legL.root, legR.root, armL.root, armR.root);
-            return { group, torso, legL, legR, armL, armR };
+            return { group, torso, legL, legR, armL, armR, leftEye, rightEye };
         }
 
-        // --- STATE & PHYSICS ---
+        // --- GAME STATE & PHYSICS ---
         let health = 100, isDead = false, isReloading = false, vel = new THREE.Vector3();
         let move = { f: false, b: false, l: false, r: false, sprint: false };
-        let projectiles = [], explosions = [];
+        let projectiles = [], explosions = [], particles = [], fragments = [];
 
-        // --- RESTORED EXPLOSION & ROCKET JUMP ---
         function createExplosion(pos) {
             const group = new THREE.Group(); group.position.copy(pos);
             for(let i=0; i<8; i++){
@@ -141,16 +154,43 @@
             }
             scene.add(group); explosions.push({ mesh: group, time: 0 });
             
-            // Rocket Jump Physics
+            // Rocket Jump
             const dist = camera.position.distanceTo(pos);
             if(dist < 6) {
                 const push = new THREE.Vector3().subVectors(camera.position, pos).normalize();
                 vel.add(push.multiplyScalar((6 - dist) * 8));
             }
             
+            // Crate Destruction
+            for(let i = crates.length - 1; i >= 0; i--) {
+                if(crates[i].position.distanceTo(pos) < 3.5) {
+                    shatterCrate(crates[i]);
+                    crates.splice(i, 1);
+                }
+            }
+            
             Object.keys(players).forEach(id => {
                 if(players[id].group.position.distanceTo(pos) < 5) connections[id].send({ type: 'hit', damage: 35 });
             });
+        }
+
+        function shatterCrate(crate) {
+            const pos = crate.position.clone();
+            scene.remove(crate);
+            for(let i=0; i<6; i++) {
+                const frag = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), crateMat);
+                frag.position.copy(pos).add(new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5));
+                frag.userData = { vel: new THREE.Vector3(Math.random()-0.5, 0.5 + Math.random(), Math.random()-0.5).multiplyScalar(5), life: 2.0 };
+                scene.add(frag);
+                fragments.push(frag);
+            }
+        }
+
+        function spawnSmoke(pos) {
+            const s = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 }));
+            s.position.copy(pos);
+            scene.add(s);
+            particles.push({ mesh: s, life: 1.0 });
         }
 
         function fire() {
@@ -172,9 +212,8 @@
             if(joinId) setupConn(peer.connect(joinId));
         });
         peer.on('connection', setupConn);
-
         function setupConn(c) {
-            c.on('open', () => { connections[c.peer] = c; document.getElementById('status').innerText = `Connected: ${Object.keys(connections).length}`; });
+            c.on('open', () => { connections[c.peer] = c; });
             c.on('data', d => {
                 if(d.type === 'hit') { health -= d.damage; if(health<=0 && !isDead) die(); updateUI(); }
                 else {
@@ -188,11 +227,9 @@
             });
         }
 
-        // --- RESTORED INVITE BUTTON ---
         document.getElementById('copy-link').onclick = () => {
             const link = `${window.location.origin}${window.location.pathname}?join=${peer.id}`;
-            navigator.clipboard.writeText(link);
-            alert("Invite Copied!");
+            navigator.clipboard.writeText(link); alert("Invite Copied!");
         };
 
         function die() { isDead = true; document.getElementById('death-screen').style.display = 'flex'; controls.unlock(); setTimeout(() => { isDead = false; health = 100; updateUI(); document.getElementById('death-screen').style.display = 'none'; camera.position.set(0, 1.7, 0); controls.lock(); }, 3000); }
@@ -206,7 +243,21 @@
 
             projectiles.forEach((p, i) => {
                 p.position.add(p.userData.vel); p.userData.life--;
+                if(p.userData.life % 2 === 0) spawnSmoke(p.position);
                 if(p.position.y < 0.1 || p.userData.life <= 0) { createExplosion(p.position); scene.remove(p); projectiles.splice(i,1); }
+            });
+
+            particles.forEach((p, i) => {
+                p.life -= delta * 1.5; p.mesh.scale.multiplyScalar(1.05); p.mesh.material.opacity = p.life;
+                if(p.life <= 0) { scene.remove(p.mesh); particles.splice(i, 1); }
+            });
+
+            fragments.forEach((f, i) => {
+                f.userData.vel.y -= 15 * delta;
+                f.position.add(f.userData.vel.clone().multiplyScalar(delta));
+                f.userData.life -= delta;
+                if(f.position.y < 0.2) { f.position.y = 0.2; f.userData.vel.set(0,0,0); }
+                if(f.userData.life <= 0) { scene.remove(f); fragments.splice(i, 1); }
             });
 
             explosions.forEach((ex, i) => {
@@ -227,8 +278,9 @@
 
             for(let id in players) {
                 const p = players[id];
-                p.group.position.lerp(p.target, 0.2);
-                p.group.rotation.y = p.tRot + Math.PI;
+                p.group.position.lerp(p.target, 0.2); p.group.rotation.y = p.tRot + Math.PI;
+                const eyeShake = Math.sin(Date.now() * 0.01) * 0.02;
+                p.leftEye.pupil.position.x = eyeShake; p.rightEye.pupil.position.x = -eyeShake;
                 if(p.inAir) {
                     p.anim += delta * 15;
                     p.legL.root.rotation.z = Math.sin(p.anim) * 0.5; p.legR.root.rotation.z = Math.cos(p.anim) * 0.5;
